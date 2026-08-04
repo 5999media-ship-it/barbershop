@@ -1,0 +1,53 @@
+# =============================================================================
+# Netlify-configuratie
+# =============================================================================
+# Deze app is géén statische site. Er draaien server components, route handlers,
+# server actions en middleware. Een `next export` naar een mapje HTML zou de
+# hele beveiliging slopen: de service-role key, de rate limiting en de
+# create_booking-aanroep zitten juist aan de serverkant.
+#
+# De Netlify Next Runtime (v5) regelt dit: statische assets naar de CDN,
+# server-rendering naar Netlify Functions, middleware naar Edge Functions.
+# Je hoeft er niets voor aan te passen in de code.
+# =============================================================================
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Next 15 + React 19 wil Node 20 of hoger.
+  NODE_VERSION = "22"
+  # Scheelt bouwtijd: devDependencies zijn nodig voor de build (tailwind, types).
+  NPM_FLAGS = "--include=dev"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# -----------------------------------------------------------------------------
+# Caching van statische assets. Next zet een contenthash in de bestandsnaam,
+# dus die mogen onbeperkt gecached worden.
+# -----------------------------------------------------------------------------
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# -----------------------------------------------------------------------------
+# Deploy previews en branch-deploys mogen nooit geïndexeerd worden. Anders
+# concurreren ze in Google met je echte salonpagina's — een klassieke manier om
+# je eigen SEO te slopen.
+# -----------------------------------------------------------------------------
+[context.deploy-preview]
+  [context.deploy-preview.environment]
+    NEXT_PUBLIC_SITE_URL = "https://deploy-preview.netlify.app"
+
+[[context.deploy-preview.headers]]
+  for = "/*"
+  [context.deploy-preview.headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[context.branch-deploy.headers]]
+  for = "/*"
+  [context.branch-deploy.headers.values]
+    X-Robots-Tag = "noindex, nofollow"

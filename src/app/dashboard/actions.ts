@@ -1,0 +1,336 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
+
+import { createClient } from '@/lib/supabase/server'
+import { citySlug } from '@/lib/slug'
+
+export type ActionState = { error?: string; message?: string }
+
+/**
+ * Alle acties hieronder draaien met de sessie van de ingelogde gebruiker.
+ * Er staat bewust geen enkele rolcontrole in deze functies: de RLS-policies
+ * (can_manage_shop / is_shop_staff) doen dat werk. Twee plekken met dezelfde
+ * regel is één plek te veel — die lopen vroeg of laat uit elkaar.
+ */
+
+// ---------------------------------------------------------------------------
+// Afspraken
+// ---------------------------------------------------------------------------
+const statusSchema = z.object({
+  bookingId: z.string().uuid(),
+  status: z.enum(['confirmed', 'completed', 'cancelled', 'no_show']),
+})
+
+export async function updateBookingStatus(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = statusSchema.safeParse({
+    bookingId: formData.get('bookingId'),
+    status: formData.get('status'),
+  })
+  if (!parsed.success) return { error: 'Ongeldige actie.' }
+
+  const supabase = await createClient()
+  const patch: Record<string, unknown> = { status: parsed.data.status }
+  if (parsed.data.status === 'cancelled') {
+    patch.cancelled_at = new Date().toISOString()
+    patch.cancelled_by = 'shop'
+  }
+
+  const { error } = await supabase.from('bookings').update(patch).eq('id', parsed.data.bookingId)
+  if (error) return { error: 'Bijwerken lukte niet. Heb je hier rechten voor?' }
+
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/bookings')
+  return { message: 'Bijgewerkt.' }
+}
+
+// ---------------------------------------------------------------------------
+// Behandelingen
+// ---------------------------------------------------------------------------
+const serviceSchema = z.object({
+  shopId: z.string().uuid(),
+  id: z.string().uuid().optional().or(z.literal('')),
+  name: z.string().trim().min(2).max(100),
+  description: z.string().trim().max(1000).optional().or(z.literal('')),
+  durationMinutes: z.coerce.number().int().min(5).max(480),
+  bufferMinutes: z.coerce.number().int().min(0).max(120),
+  priceEuro: z.coerce.number().min(0).max(10000),
+  isActive: z.coerce.boolean(),
+})
+
+export async function saveService(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = serviceSchema.safeParse({
+    shopId: formData.get('shopId'),
+    id: formData.get('id') ?? '',
+    name: formData.get('name'),
+    description: formData.get('description') ?? '',
+    durationMinutes: formData.get('durationMinutes'),
+    bufferMinutes: formData.get('bufferMinutes') ?? 0,
+    priceEuro: formData.get('priceEuro'),
+    isActive: formData.get('isActive') === 'on',
+  })
+  if (!parsed.success) return { error: 'Controleer de ingevulde velden.' }
+
+  const d = parsed.data
+  const supabase = await createClient()
+
+  const row = {
+    shop_id: d.shopId,
+    slug: slugify(d.name),
+    name: d.name,
+    description: d.description || null,
+    duration_minutes: d.durationMinutes,
+    buffer_after_minutes: d.bufferMinutes,
+    // Cent-berekening via afronding: 24.95 * 100 is in floating point 2494.9999…
+    price_cents: Math.round(d.priceEuro * 100),
+    is_active: d.isActive,
+  }
+
+  const { error } = d.id
+    ? await supabase.from('services').update(row).eq('id', d.id)
+    : await supabase.from('services').insert(row)
+
+  if (error) {
+    return {
+      error: error.code === '23505'
+        ? 'Er bestaat al een behandeling met deze naam.'
+        : 'Opslaan lukte niet.',
+    }
+  }
+
+  revalidatePath('/dashboard/services')
+  return { message: 'Opgeslagen.' }
+}
+
+// ---------------------------------------------------------------------------
+// Team
+// ---------------------------------------------------------------------------
+const barberSchema = z.object({
+  shopId: z.string().uuid(),
+  id: z.string().uuid().optional().or(z.literal('')),
+  displayName: z.string().trim().min(2).max(80),
+  bio: z.string().trim().max(1000).optional().or(z.literal('')),
+  isActive: z.coerce.boolean(),
+  acceptsOnline: z.coerce.boolean(),
+})
+
+export async function saveBarber(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = barberSchema.safeParse({
+    shopId: formData.get('shopId'),
+    id: formData.get('id') ?? '',
+    displayName: formData.get('displayName'),
+    bio: formData.get('bio') ?? '',
+    isActive: formData.get('isActive') === 'on',
+    acceptsOnline: formData.get('acceptsOnline') === 'on',
+  })
+  if (!parsed.success) return { error: 'Controleer de ingevulde velden.' }
+
+  const d = parsed.data
+  const supabase = await createClient()
+
+  const row = {
+    shop_id: d.shopId,
+    slug: slugify(d.displayName),
+    display_name: d.displayName,
+    bio: d.bio || null,
+    is_active: d.isActive,
+    accepts_online_bookings: d.acceptsOnline,
+  }
+
+  const { error } = d.id
+    ? await supabase.from('barbers').update(row).eq('id', d.id)
+    : await supabase.from('barbers').insert(row)
+
+  if (error) return { error: 'Opslaan lukte niet.' }
+
+  revalidatePath('/dashboard/barbers')
+  return { message: 'Opgeslagen.' }
+}
+
+/** Koppelt of ontkoppelt een behandeling aan een barber. */
+export async function toggleBarberService(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const barberId = String(formData.get('barberId') ?? '')
+  const serviceId = String(formData.get('serviceId') ?? '')
+  const enable = formData.get('enable') === 'true'
+
+  if (!barberId || !serviceId) return { error: 'Ongeldige actie.' }
+
+  const supabase = await createClient()
+  const { error } = enable
+    ? await supabase.from('barber_services').insert({ barber_id: barberId, service_id: serviceId })
+    : await supabase
+        .from('barber_services')
+        .delete()
+        .eq('barber_id', barberId)
+        .eq('service_id', serviceId)
+
+  if (error) return { error: 'Wijzigen lukte niet.' }
+
+  revalidatePath('/dashboard/barbers')
+  return { message: 'Bijgewerkt.' }
+}
+
+// ---------------------------------------------------------------------------
+// Werktijden
+// ---------------------------------------------------------------------------
+export async function saveWorkingHours(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const barberId = String(formData.get('barberId') ?? '')
+  if (!z.string().uuid().safeParse(barberId).success) return { error: 'Ongeldige barber.' }
+
+  const rows: Array<{ barber_id: string; weekday: number; start_time: string; end_time: string }> = []
+
+  for (let weekday = 0; weekday < 7; weekday++) {
+    for (const block of ['a', 'b'] as const) {
+      const start = String(formData.get(`start_${weekday}_${block}`) ?? '')
+      const end = String(formData.get(`end_${weekday}_${block}`) ?? '')
+      if (!start || !end) continue
+      if (end <= start) {
+        return { error: `De eindtijd op dag ${weekday} moet later zijn dan de starttijd.` }
+      }
+      rows.push({ barber_id: barberId, weekday, start_time: start, end_time: end })
+    }
+  }
+
+  const supabase = await createClient()
+  const { error: delError } = await supabase
+    .from('working_hours')
+    .delete()
+    .eq('barber_id', barberId)
+  if (delError) return { error: 'Opslaan lukte niet.' }
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from('working_hours').insert(rows)
+    if (error) return { error: 'Opslaan lukte niet.' }
+  }
+
+  revalidatePath('/dashboard/hours')
+  return { message: 'Rooster opgeslagen.' }
+}
+
+// ---------------------------------------------------------------------------
+// Instellingen
+// ---------------------------------------------------------------------------
+const settingsSchema = z.object({
+  shopId: z.string().uuid(),
+  name: z.string().trim().min(2).max(120),
+  tagline: z.string().trim().max(160).optional().or(z.literal('')),
+  description: z.string().trim().max(4000).optional().or(z.literal('')),
+  phone: z.string().trim().max(30).optional().or(z.literal('')),
+  email: z.string().trim().email().optional().or(z.literal('')),
+  street: z.string().trim().max(120).optional().or(z.literal('')),
+  houseNumber: z.string().trim().max(20).optional().or(z.literal('')),
+  postalCode: z.string().trim().max(12).optional().or(z.literal('')),
+  city: z.string().trim().max(80).optional().or(z.literal('')),
+  slotInterval: z.coerce.number().int(),
+  minLeadMinutes: z.coerce.number().int().min(0).max(43200),
+  maxAdvanceDays: z.coerce.number().int().min(1).max(365),
+  cancelCutoffHours: z.coerce.number().int().min(0).max(168),
+  staffNotifyEmail: z.string().trim().email().optional().or(z.literal('')),
+  isPublished: z.coerce.boolean(),
+})
+
+export async function saveShopSettings(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = settingsSchema.safeParse({
+    shopId: formData.get('shopId'),
+    name: formData.get('name'),
+    tagline: formData.get('tagline') ?? '',
+    description: formData.get('description') ?? '',
+    phone: formData.get('phone') ?? '',
+    email: formData.get('email') ?? '',
+    street: formData.get('street') ?? '',
+    houseNumber: formData.get('houseNumber') ?? '',
+    postalCode: formData.get('postalCode') ?? '',
+    city: formData.get('city') ?? '',
+    slotInterval: formData.get('slotInterval'),
+    minLeadMinutes: formData.get('minLeadMinutes'),
+    maxAdvanceDays: formData.get('maxAdvanceDays'),
+    cancelCutoffHours: formData.get('cancelCutoffHours'),
+    staffNotifyEmail: formData.get('staffNotifyEmail') ?? '',
+    isPublished: formData.get('isPublished') === 'on',
+  })
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Controleer de ingevulde velden.' }
+  }
+
+  const d = parsed.data
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('shops')
+    .update({
+      name: d.name,
+      tagline: d.tagline || null,
+      description: d.description || null,
+      phone: d.phone || null,
+      email: d.email || null,
+      street: d.street || null,
+      house_number: d.houseNumber || null,
+      postal_code: d.postalCode || null,
+      city: d.city || null,
+      slot_interval_minutes: d.slotInterval,
+      min_lead_minutes: d.minLeadMinutes,
+      max_advance_days: d.maxAdvanceDays,
+      cancel_cutoff_hours: d.cancelCutoffHours,
+      staff_notify_email: d.staffNotifyEmail || null,
+      is_published: d.isPublished,
+    })
+    .eq('id', d.shopId)
+
+  if (error) return { error: 'Opslaan lukte niet. Heb je beheerdersrechten?' }
+
+  revalidatePath('/dashboard/settings')
+  revalidatePath('/', 'layout')
+  return { message: 'Instellingen opgeslagen.' }
+}
+
+// ---------------------------------------------------------------------------
+const NEW_SHOP = z.object({
+  name: z.string().trim().min(2).max(120),
+  city: z.string().trim().min(2).max(80),
+})
+
+export async function createShop(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = NEW_SHOP.safeParse({ name: formData.get('name'), city: formData.get('city') })
+  if (!parsed.success) return { error: 'Vul een naam en plaats in.' }
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Je bent niet ingelogd.' }
+
+  const { error } = await supabase.from('shops').insert({
+    slug: `${slugify(parsed.data.name)}-${Math.random().toString(36).slice(2, 6)}`,
+    name: parsed.data.name,
+    city: parsed.data.city,
+    created_by: user.id,
+  })
+
+  if (error) return { error: 'Aanmaken lukte niet.' }
+
+  revalidatePath('/dashboard', 'layout')
+  return { message: 'Salon aangemaakt.' }
+}
+
+// ---------------------------------------------------------------------------
+/** Slug voor namen: hergebruikt dezelfde normalisatie als de stadsslug. */
+function slugify(value: string): string {
+  return citySlug(value).slice(0, 60)
+}

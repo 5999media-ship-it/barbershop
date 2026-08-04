@@ -1,0 +1,85 @@
+import type { Metadata } from 'next'
+import Link from 'next/link'
+
+import { Button, Card } from '@/components/ui'
+import { citySlug, listPublishedShops } from '@/lib/shop-queries'
+
+export const revalidate = 600
+
+export const metadata: Metadata = {
+  title: 'Online een kapper boeken — barbershops bij jou in de buurt',
+  description:
+    'Vind een barbershop en boek in dertig seconden. Zonder account, direct bevestigd, gratis annuleren.',
+  alternates: { canonical: '/' },
+}
+
+export default async function HomePage() {
+  const shops = await listPublishedShops()
+
+  const byCity = shops.reduce<Record<string, typeof shops>>((acc, shop) => {
+    const key = shop.city ?? 'Overig'
+    ;(acc[key] ??= []).push(shop)
+    return acc
+  }, {})
+
+  return (
+    <main className="mx-auto max-w-3xl px-5 pb-24 pt-16">
+      <section className="mb-16 text-center">
+        <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-brass-400">
+          Barbershop booking
+        </p>
+        <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
+          Een verse coupe,
+          <br />
+          <span className="text-brass-300">zonder wachtrij</span>
+        </h1>
+        <p className="mx-auto mt-5 max-w-lg text-lg text-ink-300">
+          Kies je behandeling, je barber en je tijd. Direct bevestigd, geen account nodig,
+          gratis annuleren.
+        </p>
+      </section>
+
+      {shops.length === 0 ? (
+        <Card className="text-center">
+          <p className="font-medium">Nog geen salons gepubliceerd</p>
+          <p className="mt-2 text-sm text-ink-400">
+            Draai de seed-migratie of maak via het dashboard je eerste salon aan.
+          </p>
+          <Link href="/dashboard" className="mt-5 inline-block">
+            <Button>Naar het dashboard</Button>
+          </Link>
+        </Card>
+      ) : (
+        Object.entries(byCity).map(([city, list]) => (
+          <section key={city} className="mb-10">
+            <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-ink-400">
+              {city}
+            </h2>
+            <div className="space-y-2">
+              {list.map((shop) => (
+                <Link key={shop.slug} href={`/kapper/${citySlug(shop.city)}/${shop.slug}`}>
+                  <Card className="transition hover:border-brass-500/60">
+                    <p className="font-medium">{shop.name}</p>
+                    {shop.tagline && (
+                      <p className="mt-0.5 text-sm text-ink-400">{shop.tagline}</p>
+                    )}
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))
+      )}
+
+      <footer className="mt-20 border-t border-ink-800 pt-8 text-sm text-ink-400">
+        <p>
+          Ben je kapper?{' '}
+          <Link href="/login" className="text-brass-300 hover:underline">
+            Meld je salon aan
+          </Link>{' '}
+          en zet je agenda vanavond nog online.
+        </p>
+      </footer>
+    </main>
+  )
+}

@@ -1,0 +1,10 @@
+# Minimale Supabase CLI-configuratie.
+# Koppelen:  supabase link --project-ref <ref>
+# Pushen:    supabase db push
+project_id = "barber-booking"
+
+[db]
+major_version = 17
+
+[functions.notifications-dispatch]
+verify_jwt = false
