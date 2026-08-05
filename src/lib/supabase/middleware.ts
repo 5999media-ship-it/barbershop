@@ -1,71 +1,51 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest, NextResponse } from 'next/server'
 
 import { requirePublicEnv } from '@/lib/env'
-import { routing } from '@/i18n/routing'
 
 type CookieToSet = { name: string; value: string; options: CookieOptions }
 
 /**
- * Ververst de Supabase-sessie bij elke request en beschermt /dashboard.
+ * Ververst de Supabase-sessie en schrijft de vernieuwde cookies op een
+ * bestaande response.
  *
- * Belangrijk: gebruik altijd getUser() en niet getSession() in serverside code.
+ * Let op de vorm: deze functie maakt zelf géén response meer aan, maar krijgt
+ * er een mee. Dat is essentieel bij het combineren met next-intl. Zou je hier
+ * `NextResponse.next()` aanroepen, dan zet Next daar de header
+ * `x-middleware-next: 1` op — en die overrulet de rewrite die next-intl nodig
+ * heeft om `/` naar `/nl` te sturen. Het gevolg was precies wat we zagen:
+ * `/nl` en `/en` werkten, maar de kale `/` viel om.
+ *
+ * Gebruik altijd getUser() en niet getSession() in serverside code.
  * getSession() leest de cookie zonder te valideren; getUser() controleert het
- * token bij Supabase. Het verschil is precies het verschil tussen "de bezoeker
- * zegt dat hij ingelogd is" en "de bezoeker ís ingelogd".
+ * token bij Supabase. Dat is het verschil tussen "de bezoeker zegt dat hij
+ * ingelogd is" en "de bezoeker ís ingelogd".
  */
-export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request })
-
+export async function updateSession(
+  request: NextRequest,
+  response: NextResponse,
+): Promise<{ id: string } | null> {
   const env = requirePublicEnv()
 
-  const supabase = createServerClient(
-    env.supabaseUrl,
-    env.supabaseAnonKey,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          )
-        },
+  const supabase = createServerClient(env.supabaseUrl, env.supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll()
+      },
+      setAll(cookiesToSet: CookieToSet[]) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          // Op de request zodat de rest van deze middleware de verse cookie
+          // ziet, en op de response zodat de browser hem meekrijgt.
+          request.cookies.set(name, value)
+          response.cookies.set(name, value, options)
+        })
       },
     },
-  )
+  })
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
-
-  // De taalprefix eraf halen voordat we op routes matchen: /en/dashboard is
-  // dezelfde beveiligde route als /dashboard. Bij het doorsturen zetten we de
-  // prefix er weer voor, zodat de bezoeker in zijn eigen taal blijft.
-  const segments = pathname.split('/')
-  const maybeLocale = segments[1] ?? ''
-  const hasPrefix = (routing.locales as readonly string[]).includes(maybeLocale)
-  const prefix = hasPrefix ? `/${maybeLocale}` : ''
-  const route = hasPrefix ? pathname.slice(prefix.length) || '/' : pathname
-
-  if (!user && route.startsWith('/dashboard')) {
-    const url = request.nextUrl.clone()
-    url.pathname = `${prefix}/login`
-    url.searchParams.set('next', route)
-    return NextResponse.redirect(url)
-  }
-
-  if (user && route === '/login') {
-    const url = request.nextUrl.clone()
-    url.pathname = `${prefix}/dashboard`
-    url.search = ''
-    return NextResponse.redirect(url)
-  }
-
-  return response
+  return user ? { id: user.id } : null
 }
