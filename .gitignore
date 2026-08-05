@@ -11,3 +11,6 @@ next-env.d.ts
 .vercel
 supabase/.temp/
 .netlify/
+
+# Restanten van de eerste upload; handmatig te verwijderen.
+_to_delete/
