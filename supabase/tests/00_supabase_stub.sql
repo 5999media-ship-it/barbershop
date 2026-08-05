@@ -17,7 +17,8 @@ create table if not exists auth.users (
   id                 uuid primary key default gen_random_uuid(),
   email              text,
   raw_user_meta_data jsonb default '{}'::jsonb,
-  created_at         timestamptz not null default now()
+  created_at         timestamptz not null default now(),
+  last_sign_in_at    timestamptz
 );
 
 -- auth.uid() leest normaal de JWT-claim. Lokaal simuleren we dat met een GUC.
