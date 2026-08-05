@@ -36,9 +36,9 @@
     "emptyTitle": "Ainda no tin barbería publiká",
     "emptyBody": "Kore e migrashon di ehèmpel of krea bo promé barbería for di dashboard.",
     "toDashboard": "Bai dashboard",
-    "footerQuestion": "Bo ta barbero?",
-    "footerLink": "Registrá bo barbería",
-    "footerTail": "i pone bo agenda online awe nochi."
+    "footerQuestion": "Bo ta traha na un barbería?",
+    "footerLink": "Drenta",
+    "footerTail": "E administrador ta agregá barbería nobo."
   },
   "city": {
     "title": "Barbería na {city}",
@@ -149,16 +149,10 @@
     "password": "Kontraseña",
     "name": "Nòmber",
     "signIn": "Drenta",
-    "signUp": "Krea kuenta",
-    "noAccount": "Ainda no tin kuenta?",
-    "hasAccount": "Bo tin kuenta kaba?",
-    "registerShop": "Registrá barbería",
-    "minChars": "mínimo 10 karakter",
     "wait": "Un momento…",
     "invalidCredentials": "E-mail of kontraseña no ta korekto.",
     "invalidInput": "Yena un e-mail i kontraseña bálido.",
-    "signUpFailed": "No por a krea e kuenta. Tin un kuenta kaba ku e e-mail aki?",
-    "checkMail": "Chèk bo e-mail: nos a manda un link di konfirmashon. Despues bo por drenta."
+    "noAccountHint": "No tin datos pa drenta? Pidi nan na e administrador di bo barbería."
   },
   "dashboard": {
     "agenda": "Agenda",

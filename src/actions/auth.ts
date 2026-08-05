@@ -34,33 +34,9 @@ export async function signIn(_prev: AuthState, formData: FormData): Promise<Auth
   redirect(nextPath.startsWith('/') ? nextPath : '/dashboard')
 }
 
-export async function signUp(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  const parsed = credentialsSchema.safeParse({
-    email: formData.get('email'),
-    password: formData.get('password'),
-  })
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? 'Controleer je gegevens.' }
-  }
-
-  const supabase = await createClient()
-  const { error } = await supabase.auth.signUp({
-    ...parsed.data,
-    options: {
-      data: { full_name: String(formData.get('full_name') ?? '').trim() || null },
-      emailRedirectTo: `${siteUrl()}/dashboard`,
-    },
-  })
-
-  if (error) {
-    return { error: 'Aanmelden lukte niet. Bestaat er al een account met dit adres?' }
-  }
-
-  return {
-    message:
-      'Check je mailbox: we hebben een bevestigingslink gestuurd. Daarna kun je inloggen.',
-  }
-}
+// signUp is bewust verwijderd: accounts worden door de beheerder aangemaakt
+// (zie createStaffAccount in src/actions/dashboard.ts). Sluit registratie ook
+// in Supabase af onder Authentication → Sign In / Providers.
 
 export async function signOut() {
   const supabase = await createClient()

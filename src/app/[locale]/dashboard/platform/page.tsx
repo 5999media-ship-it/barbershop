@@ -37,8 +37,8 @@ export default async function PlatformPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Platform</h1>
         <p className="mt-1 text-sm text-ink-400">
-          Alle salons op dit platform. Publiceren zet een salon live; offline halen laat
-          bestaande afspraken staan maar blokkeert nieuwe boekingen.
+          Jij bent de enige die salons kan aanmaken. Publiceren zet een salon live; offline
+          halen laat bestaande afspraken staan maar blokkeert nieuwe boekingen.
         </p>
       </header>
 

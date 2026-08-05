@@ -4,9 +4,15 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { citySlug } from '@/lib/slug'
 
 export type ActionState = { error?: string; message?: string }
+
+/** Slug voor namen: hergebruikt dezelfde normalisatie als de stadsslug. */
+function slugify(value: string): string {
+  return citySlug(value).slice(0, 60)
+}
 
 /**
  * Alle acties hieronder draaien met de sessie van de ingelogde gebruiker.
@@ -301,41 +307,6 @@ export async function saveShopSettings(
 }
 
 // ---------------------------------------------------------------------------
-const NEW_SHOP = z.object({
-  name: z.string().trim().min(2).max(120),
-  city: z.string().trim().min(2).max(80),
-})
-
-export async function createShop(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const parsed = NEW_SHOP.safeParse({ name: formData.get('name'), city: formData.get('city') })
-  if (!parsed.success) return { error: 'Vul een naam en plaats in.' }
-
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: 'Je bent niet ingelogd.' }
-
-  const { error } = await supabase.from('shops').insert({
-    slug: `${slugify(parsed.data.name)}-${Math.random().toString(36).slice(2, 6)}`,
-    name: parsed.data.name,
-    city: parsed.data.city,
-    created_by: user.id,
-  })
-
-  if (error) return { error: 'Aanmaken lukte niet.' }
-
-  revalidatePath('/dashboard', 'layout')
-  return { message: 'Salon aangemaakt.' }
-}
-
-// ---------------------------------------------------------------------------
-/** Slug voor namen: hergebruikt dezelfde normalisatie als de stadsslug. */
-function slugify(value: string): string {
-  return citySlug(value).slice(0, 60)
-}
-
-// ---------------------------------------------------------------------------
 // Afbeeldingen
 // ---------------------------------------------------------------------------
 // De upload zelf gebeurt in de browser rechtstreeks naar Supabase Storage,
@@ -509,4 +480,122 @@ export async function setShopPublished(
   revalidatePath('/dashboard/platform')
   revalidatePath('/', 'layout')
   return { message: value ? 'Salon gepubliceerd.' : 'Salon offline gehaald.' }
+}
+
+// ---------------------------------------------------------------------------
+// Salons aanmaken — alleen de platformbeheerder
+// ---------------------------------------------------------------------------
+const newShopSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  city: z.string().trim().min(2).max(80),
+  ownerEmail: z.string().trim().email().optional().or(z.literal('')),
+  timezone: z.string().trim().min(3).max(64),
+  currency: z.string().trim().length(3),
+})
+
+export async function createShop(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = newShopSchema.safeParse({
+    name: formData.get('name'),
+    city: formData.get('city'),
+    ownerEmail: formData.get('ownerEmail') ?? '',
+    timezone: formData.get('timezone') ?? 'America/Curacao',
+    currency: formData.get('currency') ?? 'ANG',
+  })
+  if (!parsed.success) return { error: 'Vul minimaal een naam en een plaats in.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('admin_create_shop', {
+    p_name: parsed.data.name,
+    p_city: parsed.data.city,
+    p_owner_email: parsed.data.ownerEmail || null,
+    p_timezone: parsed.data.timezone,
+    p_currency: parsed.data.currency,
+  })
+
+  if (error) return { error: error.hint ?? 'Aanmaken lukte niet.' }
+
+  const result = data as { ok: boolean; warning?: string; hint?: string }
+  revalidatePath('/dashboard', 'layout')
+  revalidatePath('/', 'layout')
+
+  return result.warning === 'no_account'
+    ? { message: result.hint ?? 'Salon aangemaakt.' }
+    : { message: 'Salon aangemaakt.' }
+}
+
+// ---------------------------------------------------------------------------
+// Account aanmaken voor een medewerker
+// ---------------------------------------------------------------------------
+// Een kapper die zijn eigen agenda wil beheren heeft een inlog nodig. In plaats
+// van hem te laten registreren maak jij het account aan en geef je hem het
+// wachtwoord. Dat kan alleen met de service-role sleutel, dus dit gebeurt hier
+// op de server — met een eigen rechtencontrole ervoor, want die sleutel kent
+// geen RLS.
+const staffAccountSchema = z.object({
+  shopId: z.string().uuid(),
+  email: z.string().trim().toLowerCase().email(),
+  password: z.string().min(10).max(200),
+  fullName: z.string().trim().max(100).optional().or(z.literal('')),
+  role: z.enum(['barber', 'manager', 'shop_owner']),
+})
+
+export async function createStaffAccount(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = staffAccountSchema.safeParse({
+    shopId: formData.get('shopId'),
+    email: formData.get('email'),
+    password: formData.get('password'),
+    fullName: formData.get('fullName') ?? '',
+    role: formData.get('role') ?? 'barber',
+  })
+  if (!parsed.success) {
+    return { error: 'Controleer het e-mailadres en gebruik een wachtwoord van minimaal 10 tekens.' }
+  }
+
+  const d = parsed.data
+  const supabase = await createClient()
+
+  // Rechtencontrole vóór we de service-role sleutel aanraken. can_manage_shop
+  // draait onder de sessie van de gebruiker, dus dit is dezelfde regel als
+  // overal elders — niet een tweede, afwijkende kopie ervan.
+  const { data: allowed } = await supabase.rpc('can_manage_shop', { p_shop_id: d.shopId })
+  if (allowed !== true) return { error: 'Je hebt geen beheerrechten voor deze salon.' }
+
+  const admin = createAdminClient()
+  const { error: createError } = await admin.auth.admin.createUser({
+    email: d.email,
+    password: d.password,
+    email_confirm: true, // geen bevestigingsmail: jij geeft de inlog persoonlijk door
+    user_metadata: { full_name: d.fullName || null },
+  })
+
+  // Bestaat het account al? Dan is koppelen alsnog prima; alleen het
+  // wachtwoord blijft dan wat het was.
+  const alreadyExists =
+    createError?.message?.toLowerCase().includes('already') ||
+    createError?.message?.toLowerCase().includes('registered')
+
+  if (createError && !alreadyExists) {
+    console.error('[createStaffAccount]', createError)
+    return { error: 'Het account kon niet aangemaakt worden.' }
+  }
+
+  const { data: linked, error: linkError } = await supabase.rpc('invite_member', {
+    p_shop_id: d.shopId,
+    p_email: d.email,
+    p_role: d.role,
+  })
+
+  if (linkError) return { error: linkError.hint ?? 'Koppelen lukte niet.' }
+  if (!(linked as { ok: boolean }).ok) return { error: 'Koppelen lukte niet.' }
+
+  revalidatePath('/dashboard/barbers')
+
+  return {
+    message: alreadyExists
+      ? 'Dit account bestond al en is nu aan de salon gekoppeld.'
+      : `Account aangemaakt en gekoppeld. Geef ${d.email} het wachtwoord door.`,
+  }
 }

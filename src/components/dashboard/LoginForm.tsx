@@ -1,11 +1,24 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useFormStatus } from 'react-dom'
 
 import { Alert, Button, Field, Input } from '@/components/ui'
-import { signIn, signUp, type AuthState } from '@/actions/auth'
+import { signIn, type AuthState } from '@/actions/auth'
 
+/**
+ * Alleen inloggen — geen registratie.
+ *
+ * Accounts worden aangemaakt door de beheerder van de salon (of door de
+ * platformbeheerder), niet door bezoekers zelf. Een registratieknop zou hier
+ * alleen maar accounts opleveren die nergens bij horen.
+ *
+ * Let op: dit formulier weghalen sluit registratie niet echt af. Zet daarvoor
+ * in Supabase onder Authentication → Sign In / Providers de optie
+ * "Allow new users to sign up" uit. Zolang die aan staat kan iemand de
+ * signup-endpoint rechtstreeks aanroepen.
+ */
 export default function LoginForm({
   nextPath,
   initialError,
@@ -13,9 +26,8 @@ export default function LoginForm({
   nextPath: string
   initialError?: string
 }) {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
-  const action = mode === 'signin' ? signIn : signUp
-  const [state, formAction] = useActionState<AuthState, FormData>(action, {
+  const t = useTranslations('auth')
+  const [state, formAction] = useActionState<AuthState, FormData>(signIn, {
     error: initialError,
   })
 
@@ -24,53 +36,27 @@ export default function LoginForm({
       <input type="hidden" name="next" value={nextPath} />
 
       {state.error && <Alert>{state.error}</Alert>}
-      {state.message && <Alert tone="success">{state.message}</Alert>}
 
-      {mode === 'signup' && (
-        <Field label="Naam">
-          <Input name="full_name" autoComplete="name" />
-        </Field>
-      )}
-
-      <Field label="E-mail" required>
+      <Field label={t('email')} required>
         <Input name="email" type="email" autoComplete="email" required />
       </Field>
 
-      <Field
-        label="Wachtwoord"
-        hint={mode === 'signup' ? 'minimaal 10 tekens' : undefined}
-        required
-      >
-        <Input
-          name="password"
-          type="password"
-          autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-          required
-          minLength={mode === 'signup' ? 10 : undefined}
-        />
+      <Field label={t('password')} required>
+        <Input name="password" type="password" autoComplete="current-password" required />
       </Field>
 
-      <SubmitButton label={mode === 'signin' ? 'Inloggen' : 'Account aanmaken'} />
+      <SubmitButton label={t('signIn')} wait={t('wait')} />
 
-      <p className="pt-2 text-center text-sm text-ink-400">
-        {mode === 'signin' ? 'Nog geen account?' : 'Al een account?'}{' '}
-        <button
-          type="button"
-          onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-          className="text-brass-300 hover:underline"
-        >
-          {mode === 'signin' ? 'Salon aanmelden' : 'Inloggen'}
-        </button>
-      </p>
+      <p className="pt-2 text-center text-sm text-ink-400">{t('noAccountHint')}</p>
     </form>
   )
 }
 
-function SubmitButton({ label }: { label: string }) {
+function SubmitButton({ label, wait }: { label: string; wait: string }) {
   const { pending } = useFormStatus()
   return (
     <Button type="submit" size="lg" className="w-full" disabled={pending}>
-      {pending ? 'Even geduld…' : label}
+      {pending ? wait : label}
     </Button>
   )
 }

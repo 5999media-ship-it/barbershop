@@ -36,9 +36,9 @@
     "emptyTitle": "Nog geen salons gepubliceerd",
     "emptyBody": "Draai de seed-migratie of maak via het dashboard je eerste salon aan.",
     "toDashboard": "Naar het dashboard",
-    "footerQuestion": "Ben je kapper?",
-    "footerLink": "Meld je salon aan",
-    "footerTail": "en zet je agenda vanavond nog online."
+    "footerQuestion": "Werk je bij een salon?",
+    "footerLink": "Inloggen",
+    "footerTail": "Nieuwe salons worden door de beheerder toegevoegd."
   },
   "city": {
     "title": "Kapper in {city}",
@@ -149,16 +149,10 @@
     "password": "Wachtwoord",
     "name": "Naam",
     "signIn": "Inloggen",
-    "signUp": "Account aanmaken",
-    "noAccount": "Nog geen account?",
-    "hasAccount": "Al een account?",
-    "registerShop": "Salon aanmelden",
-    "minChars": "minimaal 10 tekens",
     "wait": "Even geduld…",
     "invalidCredentials": "E-mailadres of wachtwoord onjuist.",
     "invalidInput": "Vul een geldig e-mailadres en wachtwoord in.",
-    "signUpFailed": "Aanmelden lukte niet. Bestaat er al een account met dit adres?",
-    "checkMail": "Check je mailbox: we hebben een bevestigingslink gestuurd. Daarna kun je inloggen."
+    "noAccountHint": "Geen inloggegevens? Vraag ze aan bij de beheerder van je salon."
   },
   "dashboard": {
     "agenda": "Agenda",

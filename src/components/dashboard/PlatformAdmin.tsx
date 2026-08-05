@@ -4,6 +4,7 @@ import { useActionState } from 'react'
 
 import { Alert, Badge, Button, Card, Field, Input } from '@/components/ui'
 import {
+  createShop,
   setShopPublished,
   togglePlatformAdmin,
   type ActionState,
@@ -18,6 +19,10 @@ export default function PlatformAdmin({
   currentEmail: string
 }) {
   const [pubState, pubAction] = useActionState<ActionState, FormData>(setShopPublished, {})
+  const [newState, newAction, newPending] = useActionState<ActionState, FormData>(
+    createShop,
+    {},
+  )
   const [adminState, adminAction, adminPending] = useActionState<ActionState, FormData>(
     togglePlatformAdmin,
     {},
@@ -30,11 +35,78 @@ export default function PlatformAdmin({
 
       <section>
         <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-ink-400">
+          Nieuwe salon
+        </h2>
+
+        <Card className="space-y-4">
+          <p className="text-sm text-ink-400">
+            De salon start als concept: onzichtbaar voor bezoekers tot je hem publiceert.
+            Behandelingen, team en werktijden vul je daarna in bij de salon zelf.
+          </p>
+
+          {newState.error && <Alert>{newState.error}</Alert>}
+          {newState.message && <Alert tone="success">{newState.message}</Alert>}
+
+          <form action={newAction} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Naam" required>
+                <Input name="name" required maxLength={120} placeholder="Junique Fades" />
+              </Field>
+              <Field label="Plaats" required>
+                <Input name="city" required maxLength={80} placeholder="Willemstad" />
+              </Field>
+            </div>
+
+            <Field
+              label="E-mail van de eigenaar"
+              hint="optioneel — moet al een account hebben"
+            >
+              <Input name="ownerEmail" type="email" placeholder="eigenaar@salon.com" />
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Tijdzone">
+                <select
+                  name="timezone"
+                  defaultValue="America/Curacao"
+                  className="w-full rounded-[10px] border border-ink-600 bg-ink-850 px-3.5 py-2.5 text-[15px]"
+                >
+                  <option value="America/Curacao">Curaçao / Bonaire</option>
+                  <option value="America/Aruba">Aruba</option>
+                  <option value="America/Santo_Domingo">Dominicaanse Republiek</option>
+                  <option value="Europe/Amsterdam">Nederland</option>
+                </select>
+              </Field>
+              <Field label="Valuta">
+                <select
+                  name="currency"
+                  defaultValue="ANG"
+                  className="w-full rounded-[10px] border border-ink-600 bg-ink-850 px-3.5 py-2.5 text-[15px]"
+                >
+                  <option value="ANG">ANG — Antilliaanse gulden</option>
+                  <option value="AWG">AWG — Arubaanse florin</option>
+                  <option value="USD">USD — Amerikaanse dollar</option>
+                  <option value="EUR">EUR — euro</option>
+                </select>
+              </Field>
+            </div>
+
+            <Button type="submit" disabled={newPending}>
+              {newPending ? 'Aanmaken…' : 'Salon aanmaken'}
+            </Button>
+          </form>
+        </Card>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-ink-400">
           Salons ({shops.length})
         </h2>
 
         {shops.length === 0 ? (
-          <Card className="text-center text-ink-400">Er zijn nog geen salons aangemaakt.</Card>
+          <Card className="text-center text-ink-400">
+            Er zijn nog geen salons. Maak er hierboven een aan.
+          </Card>
         ) : (
           <ul className="space-y-2">
             {shops.map((shop) => (

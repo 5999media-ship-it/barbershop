@@ -5,6 +5,7 @@ import { useActionState, useState } from 'react'
 import { Alert, Badge, Button, Card, Field, Input, Textarea } from '@/components/ui'
 import ImageUpload from '@/components/ImageUpload'
 import {
+  createStaffAccount,
   inviteMember,
   saveBarber,
   saveBarberAvatar,
@@ -29,6 +30,10 @@ export default function BarberEditor({
   const [linkState, linkAction] = useActionState<ActionState, FormData>(toggleBarberService, {})
   const [inviteState, inviteAction, invitePending] = useActionState<ActionState, FormData>(
     inviteMember,
+    {},
+  )
+  const [accountState, accountAction, accountPending] = useActionState<ActionState, FormData>(
+    createStaffAccount,
     {},
   )
 
@@ -107,12 +112,60 @@ export default function BarberEditor({
       )}
 
       <Card className="mb-6">
-        <h2 className="text-lg font-semibold">Kapper koppelen aan een account</h2>
+        <h2 className="text-lg font-semibold">Account aanmaken voor een kapper</h2>
         <p className="mb-4 mt-1 text-sm text-ink-400">
-          Een kapper die zijn eigen foto, rooster en tarief wil beheren heeft een account
-          nodig. Laat hem zich registreren via de inlogpagina en koppel hem daarna hier met
-          hetzelfde e-mailadres.
+          Wil een kapper zijn eigen foto, rooster en tarief beheren, dan maak jij hier zijn
+          account aan en geef je hem het wachtwoord. Hij kan dat later zelf wijzigen. Doe je
+          dit niet, dan blijft hij gewoon boekbaar — jij beheert dan zijn agenda.
         </p>
+
+        {accountState.error && (
+          <div className="mb-3">
+            <Alert>{accountState.error}</Alert>
+          </div>
+        )}
+        {accountState.message && (
+          <div className="mb-3">
+            <Alert tone="success">{accountState.message}</Alert>
+          </div>
+        )}
+
+        <form action={accountAction} className="mb-6 space-y-4">
+          <input type="hidden" name="shopId" value={shopId} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Naam">
+              <Input name="fullName" maxLength={100} placeholder="Marley" />
+            </Field>
+            <Field label="E-mailadres" required>
+              <Input name="email" type="email" required placeholder="marley@salon.com" />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+            <Field label="Wachtwoord" hint="minimaal 10 tekens — geef dit persoonlijk door">
+              <Input name="password" type="text" required minLength={10} maxLength={200} />
+            </Field>
+            <Field label="Rol">
+              <select
+                name="role"
+                defaultValue="barber"
+                className="w-full rounded-[10px] border border-ink-600 bg-ink-850 px-3.5 py-2.5 text-[15px]"
+              >
+                <option value="barber">Kapper</option>
+                <option value="manager">Manager</option>
+                <option value="shop_owner">Eigenaar</option>
+              </select>
+            </Field>
+          </div>
+          <Button type="submit" disabled={accountPending}>
+            {accountPending ? 'Aanmaken…' : 'Account aanmaken en koppelen'}
+          </Button>
+        </form>
+
+        <div className="border-t border-ink-800 pt-5">
+          <h3 className="font-medium">Bestaand account koppelen</h3>
+          <p className="mb-4 mt-1 text-sm text-ink-400">
+            Heeft iemand al een account? Dan volstaat het e-mailadres.
+          </p>
 
         {inviteState.error && (
           <div className="mb-3">
@@ -145,10 +198,11 @@ export default function BarberEditor({
               </select>
             </Field>
           </div>
-          <Button type="submit" disabled={invitePending}>
+          <Button type="submit" variant="ghost" disabled={invitePending}>
             Koppelen
           </Button>
-        </form>
+          </form>
+        </div>
       </Card>
 
       <div className="space-y-3">

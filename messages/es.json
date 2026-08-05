@@ -36,9 +36,9 @@
     "emptyTitle": "Aún no hay barberías publicadas",
     "emptyBody": "Ejecuta la migración de datos de ejemplo o crea tu primera barbería desde el panel.",
     "toDashboard": "Ir al panel",
-    "footerQuestion": "¿Eres barbero?",
-    "footerLink": "Registra tu barbería",
-    "footerTail": "y pon tu agenda en línea esta misma noche."
+    "footerQuestion": "¿Trabajas en una barbería?",
+    "footerLink": "Iniciar sesión",
+    "footerTail": "Las nuevas barberías las añade el administrador."
   },
   "city": {
     "title": "Barberías en {city}",
@@ -149,16 +149,10 @@
     "password": "Contraseña",
     "name": "Nombre",
     "signIn": "Iniciar sesión",
-    "signUp": "Crear cuenta",
-    "noAccount": "¿Aún no tienes cuenta?",
-    "hasAccount": "¿Ya tienes cuenta?",
-    "registerShop": "Registrar barbería",
-    "minChars": "mínimo 10 caracteres",
     "wait": "Un momento…",
     "invalidCredentials": "Correo o contraseña incorrectos.",
     "invalidInput": "Introduce un correo y una contraseña válidos.",
-    "signUpFailed": "No se pudo crear la cuenta. ¿Ya existe una con este correo?",
-    "checkMail": "Revisa tu correo: te hemos enviado un enlace de confirmación. Después podrás iniciar sesión."
+    "noAccountHint": "¿Sin datos de acceso? Pídeselos al administrador de tu barbería."
   },
   "dashboard": {
     "agenda": "Agenda",

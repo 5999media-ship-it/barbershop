@@ -167,6 +167,25 @@ bestaan of hoe lang ze duren. Dat is bewust: zou hij de duur mogen aanpassen,
 dan kan hij zijn behandeling op vijf minuten zetten en de agenda volproppen.
 Zie `tg_barber_services_guard` — en de test die dat afdwingt.
 
+### Wie maakt wat aan
+
+Salons worden **uitsluitend** door de platformbeheerder aangemaakt, in
+**Dashboard → Platform**. Dat is geen verstopte knop maar een RLS-policy: ook
+met de publieke sleutel en een handgeschreven verzoek komt er geen salon bij.
+
+Accounts voor kappers en managers maak je aan bij **Dashboard → Team**. Je
+kiest een e-mailadres en een wachtwoord en geeft dat persoonlijk door; de
+kapper kan het daarna zelf wijzigen. Heeft iemand al een account, dan volstaat
+koppelen op e-mailadres.
+
+Registreren kan niet meer via de website. Zet dat ook af in Supabase onder
+**Authentication → Sign In / Providers → Allow new users to sign up**, anders
+blijft de registratie-endpoint van Supabase zelf gewoon bereikbaar — het
+formulier weghalen is geen slot.
+
+Een kapper hoeft trouwens geen account te hebben om boekbaar te zijn. Zonder
+account beheer jij zijn agenda; met account doet hij dat zelf.
+
 ### Jezelf tot superadmin maken
 
 Er is geen knop voor, want dat zou het hele rollenmodel waardeloos maken.
@@ -304,6 +323,7 @@ supabase/migrations/
   …000500_notifications.sql    outbox, triggers, dispatcher-API, onderhoud
   …000600_seed_demo.sql        demodata
   …000700_roles_storage.sql    zelfbeheer kappers, opslag, platformbeheer
+  …000800_admin_only_shops.sql salons aanmaken alleen door de beheerder
 supabase/tests/                 lokale regressietests (20 stuks)
 supabase/functions/
   notifications-dispatch/       Edge Function: mail via Resend, SMS via Twilio
@@ -329,7 +349,7 @@ npm run db:test
 ```
 
 Draait alle migraties op een lokale, kale Postgres 16 (met een stub voor het
-`auth`- en `storage`-schema) en voert 35 tests uit:
+`auth`- en `storage`-schema) en voert 39 tests uit:
 
 - `01_smoke.sql` — beschikbaarheid, normalisatie van e-mail en telefoon,
   dubbelboeken, de EXCLUDE-constraint, rate limiting, annuleren, het intrekken

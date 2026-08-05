@@ -36,9 +36,9 @@
     "emptyTitle": "No shops published yet",
     "emptyBody": "Run the seed migration or create your first shop from the dashboard.",
     "toDashboard": "Go to dashboard",
-    "footerQuestion": "Are you a barber?",
-    "footerLink": "List your shop",
-    "footerTail": "and put your calendar online tonight."
+    "footerQuestion": "Work at a shop?",
+    "footerLink": "Log in",
+    "footerTail": "New shops are added by the administrator."
   },
   "city": {
     "title": "Barbers in {city}",
@@ -143,22 +143,16 @@
   },
   "auth": {
     "title": "Log in",
-    "subtitle": "For shops and barbers. Customers don't need an account.",
+    "subtitle": "For shops and barbers. Customers don’t need an account.",
     "backToSite": "Back to the site",
     "email": "Email",
     "password": "Password",
     "name": "Name",
     "signIn": "Log in",
-    "signUp": "Create account",
-    "noAccount": "No account yet?",
-    "hasAccount": "Already have an account?",
-    "registerShop": "List your shop",
-    "minChars": "at least 10 characters",
     "wait": "One moment…",
     "invalidCredentials": "Email or password is incorrect.",
     "invalidInput": "Enter a valid email address and password.",
-    "signUpFailed": "Sign-up failed. Does an account already exist for this address?",
-    "checkMail": "Check your inbox: we've sent a confirmation link. After that you can log in."
+    "noAccountHint": "No login details? Ask the administrator of your shop."
   },
   "dashboard": {
     "agenda": "Calendar",

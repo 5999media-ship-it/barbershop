@@ -51,6 +51,24 @@ end $$;
 reset role;
 
 -- -----------------------------------------------------------------------------
+-- Opzet als beheerder: sinds migratie 000800 kan een gewone gebruiker zelf
+-- geen salon meer aanmaken (dat toetst TEST 36). Voor deze test hebben we een
+-- tweede salon nodig waar Mallory eigenaar van is.
+insert into public.shops (id, slug, name, city, created_by)
+values ('eeeeeeee-0000-4000-8000-000000000001', 'evil-shop', 'Evil Shop', 'Amsterdam',
+        'aaaaaaaa-0000-4000-8000-000000000003')
+on conflict (id) do nothing;
+
+insert into public.shop_members (shop_id, user_id, role)
+values ('eeeeeeee-0000-4000-8000-000000000001',
+        'aaaaaaaa-0000-4000-8000-000000000003', 'shop_owner')
+on conflict (shop_id, user_id) do update set role = 'shop_owner';
+
+insert into public.barbers (id, shop_id, user_id, slug, display_name)
+values ('eeeeeeee-0000-4000-8000-000000000002', 'eeeeeeee-0000-4000-8000-000000000001',
+        'aaaaaaaa-0000-4000-8000-000000000003', 'mallory', 'Mallory')
+on conflict (id) do nothing;
+
 \echo '--- TEST 23: barber kan zijn rij niet naar een andere shop verplaatsen'
 set role authenticated;
 set request.jwt.claim.sub = 'aaaaaaaa-0000-4000-8000-000000000003';
@@ -60,16 +78,6 @@ declare
   v_barber uuid := 'eeeeeeee-0000-4000-8000-000000000002';
   v_shop   uuid;
 begin
-  -- Let op: bewust géén ON CONFLICT. Onder RLS eist Postgres bij ON CONFLICT
-  -- dat de rij ook via een SELECT-policy zichtbaar is, en een verse, nog niet
-  -- gepubliceerde shop is dat per definitie niet.
-  insert into public.shops (id, slug, name, city, created_by)
-  values (v_evil, 'evil-shop', 'Evil Shop', 'Amsterdam',
-          'aaaaaaaa-0000-4000-8000-000000000003');
-
-  insert into public.barbers (id, shop_id, user_id, slug, display_name)
-  values (v_barber, v_evil, 'aaaaaaaa-0000-4000-8000-000000000003', 'mallory', 'Mallory');
-
   update public.barbers
      set shop_id = '11111111-1111-4111-8111-111111111111'
    where id = v_barber;
@@ -320,4 +328,65 @@ begin
     raise exception 'FAAL: onzinpad geaccepteerd';
   end if;
   raise notice '    OK';
+end $$;
+
+-- =============================================================================
+-- Salons aanmaken is voorbehouden aan de platformbeheerder (migratie 000800)
+-- =============================================================================
+\echo '--- TEST 36: gewone gebruiker kan geen salon aanmaken'
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-4000-8000-000000000004';
+do $$
+begin
+  insert into public.shops (slug, name, city, created_by)
+  values ('stiekem', 'Stiekeme Salon', 'Willemstad',
+          'aaaaaaaa-0000-4000-8000-000000000004');
+  raise exception 'FAAL: iedereen kan nog steeds een salon aanmaken!';
+exception
+  when insufficient_privilege then raise notice '    OK — permission denied';
+  when others then
+    if sqlstate = '42501' then raise notice '    OK — RLS blokkeerde de insert';
+    else raise; end if;
+end $$;
+reset role;
+
+\echo '--- TEST 37: ook de RPC weigert het'
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-4000-8000-000000000004';
+do $$
+begin
+  perform public.admin_create_shop('Stiekem', 'Willemstad');
+  raise exception 'FAAL: admin_create_shop stond het toe!';
+exception when sqlstate 'P0001' then
+  raise notice '    OK — %', sqlerrm;
+end $$;
+reset role;
+
+\echo '--- TEST 38: de platformbeheerder kan het wel'
+do $$
+declare v_res jsonb;
+begin
+  -- Even beheerder maken; de guard laat dit toe vanuit de SQL-sessie.
+  update public.profiles set is_platform_admin = true
+   where id = 'aaaaaaaa-0000-4000-8000-000000000001';
+
+  perform set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', true);
+  v_res := public.admin_create_shop('Fade Factory', 'Willemstad', null, 'America/Curacao', 'ANG');
+
+  if not (v_res ->> 'ok')::boolean then raise exception 'FAAL: aanmaken mislukt'; end if;
+  raise notice '    OK — salon aangemaakt met slug %', v_res ->> 'slug';
+end $$;
+
+\echo '--- TEST 39: de aanmaker is meteen eigenaar'
+do $$
+declare v_cnt int;
+begin
+  select count(*) into v_cnt
+  from public.shop_members m
+  join public.shops s on s.id = m.shop_id
+  where s.slug = 'fade-factory'
+    and m.user_id = 'aaaaaaaa-0000-4000-8000-000000000001'
+    and m.role = 'shop_owner';
+  if v_cnt <> 1 then raise exception 'FAAL: salon zonder eigenaar aangemaakt'; end if;
+  raise notice '    OK — geen weeskind';
 end $$;
