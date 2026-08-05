@@ -1,12 +1,14 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { notFound } from 'next/navigation'
 
 import { Card } from '@/components/ui'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
+
 import { citySlug, listPublishedShops } from '@/lib/shop-queries'
 import { siteUrl } from '@/lib/env'
 
-type Params = Promise<{ city: string }>
+type Params = Promise<{ city: string; locale: string }>
 
 export const revalidate = 600
 
@@ -16,23 +18,27 @@ export const revalidate = 600
  * salonpagina's met elkaar in plaats van met de rest van het internet.
  */
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
-  const { city } = await params
+  const { city, locale } = await params
   const shops = (await listPublishedShops()).filter((s) => citySlug(s.city) === city)
   const cityName = shops[0]?.city ?? city.replace(/-/g, ' ')
+  const t = await getTranslations({ locale, namespace: 'city' })
 
   return {
-    title: `Kapper in ${cityName} — online afspraak maken`,
-    description: `Alle barbershops in ${cityName} die online boeken aanbieden. Kies een salon, kies je tijd en het staat vast.`,
+    title: t('metaTitle', { city: cityName }),
+    description: t('metaDescription', { city: cityName }),
     alternates: { canonical: `/kapper/${city}` },
   }
 }
 
 export default async function CityPage({ params }: { params: Params }) {
-  const { city } = await params
+  const { city, locale } = await params
+  setRequestLocale(locale)
   const shops = (await listPublishedShops()).filter((s) => citySlug(s.city) === city)
   if (shops.length === 0) notFound()
 
   const cityName = shops[0]?.city ?? city.replace(/-/g, ' ')
+  const t = await getTranslations({ locale, namespace: 'city' })
+  const tn = await getTranslations({ locale, namespace: 'nav' })
 
   const base = siteUrl()
 
@@ -57,15 +63,13 @@ export default async function CityPage({ params }: { params: Params }) {
       <main className="mx-auto max-w-2xl px-5 pb-24 pt-12">
         <nav aria-label="Kruimelpad" className="mb-4 text-sm text-ink-400">
           <Link href="/" className="hover:text-brass-300">
-            Kappers
+            {tn('home')}
           </Link>
         </nav>
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Kapper in <span className="capitalize">{cityName}</span>
+          <span className="capitalize">{t('title', { city: cityName })}</span>
         </h1>
-        <p className="mt-3 text-ink-300">
-          {shops.length} {shops.length === 1 ? 'salon' : 'salons'} waar je direct online kunt boeken.
-        </p>
+        <p className="mt-3 text-ink-300">{t('subtitle', { count: shops.length })}</p>
 
         <div className="mt-8 space-y-2">
           {shops.map((shop) => (

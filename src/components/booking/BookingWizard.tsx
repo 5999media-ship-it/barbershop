@@ -1,7 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import { useLocale, useTranslations } from 'next-intl'
+
+import { Link } from '@/i18n/navigation'
+import { INTL_LOCALE, type Locale } from '@/i18n/routing'
 
 import { Alert, Badge, Button, Field, Input, Spinner, Textarea, cn } from '@/components/ui'
 import { createClient } from '@/lib/supabase/client'
@@ -22,8 +25,6 @@ import {
   isoDateInZone,
 } from '@/lib/format'
 
-const STEPS = ['Behandeling', 'Barber', 'Tijd', 'Gegevens'] as const
-
 interface Props {
   shop: Shop
   services: Service[]
@@ -39,6 +40,12 @@ export default function BookingWizard({
   serviceBarbers,
   preselectedServiceSlug,
 }: Props) {
+  const t = useTranslations('booking')
+  const tc = useTranslations('common')
+  const locale = INTL_LOCALE[useLocale() as Locale]
+  const dayLabels = { today: t('today'), tomorrow: t('tomorrow') }
+  const steps = [t('stepService'), t('stepBarber'), t('stepTime'), t('stepDetails')]
+
   const supabase = useMemo(() => createClient(), [])
 
   const [step, setStep] = useState(0)
@@ -100,7 +107,7 @@ export default function BookingWizard({
       if (cancelled) return
       setLoadingDays(false)
       if (rpcError) {
-        setError('De agenda kon niet geladen worden. Ververs de pagina.')
+        setError(t('calendarFailed'))
         return
       }
       const list = (data ?? []) as AvailableDay[]
@@ -133,7 +140,7 @@ export default function BookingWizard({
       if (cancelled) return
       setLoadingSlots(false)
       if (rpcError) {
-        setError('De tijden konden niet geladen worden.')
+        setError(t('timesFailed'))
         return
       }
       setSlots((data ?? []) as AvailableSlot[])
@@ -190,7 +197,7 @@ export default function BookingWizard({
         | { ok: false; error: string; recoverable?: boolean }
 
       if (!response.ok || !payload.ok) {
-        const message = 'error' in payload ? payload.error : 'Er ging iets mis.'
+        const message = 'error' in payload ? payload.error : tc('somethingWrong')
         setError(message)
         // Slot weggekaapt? Agenda opnieuw ophalen zodat de klant meteen
         // een geldige keuze ziet in plaats van dezelfde dode knop.
@@ -203,7 +210,7 @@ export default function BookingWizard({
 
       setResult(payload.booking)
     } catch {
-      setError('Geen verbinding. Controleer je internet en probeer opnieuw.')
+      setError(tc('noConnection'))
     } finally {
       setSubmitting(false)
     }
@@ -218,26 +225,25 @@ export default function BookingWizard({
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-success-500/15 text-2xl text-success-500">
           ✓
         </div>
-        <h2 className="text-2xl font-semibold">Je afspraak staat</h2>
-        <p className="mt-2 text-ink-300">
-          We hebben een bevestiging gestuurd naar {form.email}.
-        </p>
+        <h2 className="text-2xl font-semibold">{t('successTitle')}</h2>
+        <p className="mt-2 text-ink-300">{t('successBody', { email: form.email })}</p>
 
         <dl className="card mt-6 space-y-3 p-5 text-left text-sm">
-          <Row label="Wanneer" value={`${friendlyDay(day ?? '', shop.timezone)} om ${formatTime(result.starts_at, shop.timezone)}`} />
-          <Row label="Behandeling" value={result.service_name} />
-          <Row label="Barber" value={result.barber_name} />
-          <Row label="Prijs" value={formatMoney(result.price_cents, result.currency)} />
+          <Row
+            label={t('when')}
+            value={`${friendlyDay(day ?? '', shop.timezone, locale, dayLabels)} · ${formatTime(result.starts_at, shop.timezone, locale)}`}
+          />
+          <Row label={t('service')} value={result.service_name} />
+          <Row label={t('barber')} value={result.barber_name} />
+          <Row label={t('price')} value={formatMoney(result.price_cents, result.currency, locale)} />
         </dl>
 
         <Link href={`/afspraak/${result.manage_token}`} className="mt-6 inline-block w-full">
           <Button className="w-full" size="lg">
-            Afspraak bekijken of wijzigen
+            {t('viewBooking')}
           </Button>
         </Link>
-        <p className="mt-3 text-xs text-ink-400">
-          Bewaar deze link. Hiermee kun je zonder account je afspraak verzetten of annuleren.
-        </p>
+        <p className="mt-3 text-xs text-ink-400">{t('saveLink')}</p>
       </div>
     )
   }
@@ -255,8 +261,8 @@ export default function BookingWizard({
   return (
     <div className="mx-auto max-w-xl">
       {/* Voortgang */}
-      <ol className="mb-8 flex items-center gap-1.5" aria-label="Voortgang">
-        {STEPS.map((label, i) => (
+      <ol className="mb-8 flex items-center gap-1.5" aria-label={t('progress')}>
+        {steps.map((label, i) => (
           <li key={label} className="flex flex-1 flex-col gap-1.5">
             <span
               className={cn(
@@ -281,7 +287,7 @@ export default function BookingWizard({
       {step === 0 && (
         <section>
           <h2 ref={headingRef} tabIndex={-1} className="mb-4 text-xl font-semibold">
-            Wat komt er gebeuren?
+            {t('askService')}
           </h2>
           <div className="space-y-2">
             {services.map((s) => (
@@ -310,7 +316,7 @@ export default function BookingWizard({
                   </span>
                 </span>
                 <span className="shrink-0 font-semibold text-brass-300">
-                  {formatMoney(s.price_cents, shop.currency)}
+                  {formatMoney(s.price_cents, shop.currency, locale)}
                 </span>
               </button>
             ))}
@@ -322,25 +328,25 @@ export default function BookingWizard({
       {step === 1 && (
         <section>
           <h2 ref={headingRef} tabIndex={-1} className="mb-1 text-xl font-semibold">
-            Bij wie?
+            {t('askBarber')}
           </h2>
-          <p className="mb-4 text-sm text-ink-400">
-            Geen voorkeur geeft je de meeste keuze in tijden.
-          </p>
+          <p className="mb-4 text-sm text-ink-400">{t('askBarberHint')}</p>
           <div className="space-y-2">
             <SelectableRow
+              badge={t('chosen')}
               selected={barberId === null}
               onClick={() => {
                 setBarberId(null)
                 refreshAvailability()
                 setStep(2)
               }}
-              title="Geen voorkeur"
-              subtitle="De eerstvolgende beschikbare barber"
+              title={t('noPreference')}
+              subtitle={t('noPreferenceHint')}
             />
             {eligibleBarbers.map((b) => (
               <SelectableRow
                 key={b.id}
+                badge={t('chosen')}
                 selected={barberId === b.id}
                 onClick={() => {
                   setBarberId(b.id)
@@ -359,16 +365,13 @@ export default function BookingWizard({
       {step === 2 && (
         <section>
           <h2 ref={headingRef} tabIndex={-1} className="mb-4 text-xl font-semibold">
-            Wanneer schikt het?
+            {t('askTime')}
           </h2>
 
-          {loadingDays && !days && <Spinner label="Agenda laden…" />}
+          {loadingDays && !days && <Spinner label={t('loadingCalendar')} />}
 
           {days && days.length === 0 && (
-            <Alert tone="info">
-              Er zijn de komende weken geen vrije plekken voor deze combinatie.
-              Probeer een andere barber of bel de salon.
-            </Alert>
+            <Alert tone="info">{t('noDays')}</Alert>
           )}
 
           {days && days.length > 0 && (
@@ -376,7 +379,7 @@ export default function BookingWizard({
               <div
                 className="-mx-1 mb-5 flex snap-x gap-2 overflow-x-auto px-1 pb-2"
                 role="tablist"
-                aria-label="Beschikbare dagen"
+                aria-label={t('availableDays')}
               >
                 {days.map((d) => (
                   <button
@@ -396,16 +399,16 @@ export default function BookingWizard({
                     )}
                   >
                     <span className="block text-sm font-medium capitalize">
-                      {friendlyDay(d.day, shop.timezone)}
+                      {friendlyDay(d.day, shop.timezone, locale, dayLabels)}
                     </span>
                     <span className="mt-0.5 block text-xs text-ink-400">
-                      {d.slot_count} {d.slot_count === 1 ? 'plek' : 'plekken'}
+                      {t('spots', { count: d.slot_count })}
                     </span>
                   </button>
                 ))}
               </div>
 
-              {loadingSlots && <Spinner label="Tijden laden…" />}
+              {loadingSlots && <Spinner label={t('loadingTimes')} />}
 
               {!loadingSlots && uniqueSlots.length > 0 && (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -424,7 +427,7 @@ export default function BookingWizard({
                             : 'border-ink-700 hover:border-brass-500 hover:text-brass-300',
                         )}
                       >
-                        {formatTime(s.slot_start, shop.timezone)}
+                        {formatTime(s.slot_start, shop.timezone, locale)}
                       </button>
                     )
                   })}
@@ -432,7 +435,7 @@ export default function BookingWizard({
               )}
 
               {!loadingSlots && uniqueSlots.length === 0 && day && (
-                <Alert tone="info">Op deze dag is niets meer vrij. Kies een andere dag.</Alert>
+                <Alert tone="info">{t('noSlotsToday')}</Alert>
               )}
             </>
           )}
@@ -443,31 +446,32 @@ export default function BookingWizard({
       {step === 3 && service && slot && (
         <section>
           <h2 ref={headingRef} tabIndex={-1} className="mb-4 text-xl font-semibold">
-            Bijna klaar
+            {t('almostDone')}
           </h2>
 
           <div className="card mb-6 space-y-2 p-4 text-sm">
             <div className="flex justify-between">
-              <span className="text-ink-400">Wanneer</span>
+              <span className="text-ink-400">{t('when')}</span>
               <span className="capitalize">
-                {friendlyDay(day ?? '', shop.timezone)} · {formatTime(slot.slot_start, shop.timezone)}
+                {friendlyDay(day ?? '', shop.timezone, locale, dayLabels)} ·{' '}
+                {formatTime(slot.slot_start, shop.timezone, locale)}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-ink-400">Behandeling</span>
+              <span className="text-ink-400">{t('service')}</span>
               <span>{service.name}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-ink-400">Barber</span>
+              <span className="text-ink-400">{t('barber')}</span>
               <span>
                 {barbers.find((b) => b.id === (barberId ?? slot.barber_id))?.display_name ??
-                  'Wordt toegewezen'}
+                  t('toBeAssigned')}
               </span>
             </div>
             <div className="flex justify-between border-t border-ink-800 pt-2 font-semibold">
-              <span>Te betalen in de zaak</span>
+              <span>{t('payInShop')}</span>
               <span className="text-brass-300">
-                {formatMoney(slot.price_cents, shop.currency)}
+                {formatMoney(slot.price_cents, shop.currency, locale)}
               </span>
             </div>
           </div>
@@ -479,7 +483,7 @@ export default function BookingWizard({
               void submit()
             }}
           >
-            <Field label="Naam" required>
+            <Field label={t('name')} required>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -489,7 +493,7 @@ export default function BookingWizard({
                 maxLength={100}
               />
             </Field>
-            <Field label="E-mail" hint="voor je bevestiging" required>
+            <Field label={t('email')} hint={t('emailHint')} required>
               <Input
                 type="email"
                 value={form.email}
@@ -499,7 +503,7 @@ export default function BookingWizard({
                 required
               />
             </Field>
-            <Field label="Telefoon" hint="voor als er iets verandert" required>
+            <Field label={t('phone')} hint={t('phoneHint')} required>
               <Input
                 type="tel"
                 value={form.phone}
@@ -509,12 +513,12 @@ export default function BookingWizard({
                 required
               />
             </Field>
-            <Field label="Opmerking" hint="optioneel">
+            <Field label={t('notes')} hint={tc('optional')}>
               <Textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 maxLength={1000}
-                placeholder="Bijvoorbeeld: nummer 2 aan de zijkanten, bovenop laten."
+                placeholder={t('notesPlaceholder')}
               />
             </Field>
 
@@ -532,10 +536,10 @@ export default function BookingWizard({
             </div>
 
             <Button type="submit" size="lg" className="w-full" disabled={submitting || !canContinue}>
-              {submitting ? 'Bezig met vastleggen…' : 'Afspraak bevestigen'}
+              {submitting ? t('submitting') : t('confirm')}
             </Button>
             <p className="text-center text-xs text-ink-400">
-              Gratis annuleren tot {shop.cancel_cutoff_hours} uur van tevoren. Je betaalt in de zaak.
+              {t('cancelPolicy', { hours: shop.cancel_cutoff_hours })}
             </p>
           </form>
         </section>
@@ -548,11 +552,11 @@ export default function BookingWizard({
           onClick={() => setStep((s) => Math.max(0, s - 1))}
           disabled={step === 0 || submitting}
         >
-          Terug
+          {tc('back')}
         </Button>
         {step < 3 && (
           <Button onClick={() => setStep((s) => Math.min(3, s + 1))} disabled={!canContinue}>
-            Verder
+            {tc('next')}
           </Button>
         )}
       </div>
@@ -566,11 +570,13 @@ function SelectableRow({
   onClick,
   title,
   subtitle,
+  badge,
 }: {
   selected: boolean
   onClick: () => void
   title: string
   subtitle?: string
+  badge: string
 }) {
   return (
     <button
@@ -586,7 +592,7 @@ function SelectableRow({
         <span className="block font-medium">{title}</span>
         {subtitle && <span className="mt-0.5 block text-sm text-ink-400">{subtitle}</span>}
       </span>
-      {selected && <Badge tone="brass">Gekozen</Badge>}
+      {selected && <Badge tone="brass">{badge}</Badge>}
     </button>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 
 import { Alert, Badge, Button, Card, Textarea } from '@/components/ui'
 import type { BookingDetail } from '@/lib/supabase/database.types'

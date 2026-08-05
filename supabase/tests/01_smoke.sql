@@ -18,8 +18,12 @@ declare
 begin
   ---------------------------------------------------------------------------
   raise notice '--- TEST 1: beschikbaarheid wordt berekend';
+  -- Minimaal 36 uur vooruit: het annuleervenster van de demosalon is 12 uur,
+  -- dus een slot van vanavond zou TEST 13 laten struikelen op het tijdstip in
+  -- plaats van op de logica.
   select s.slot_start, s.barber_id into v_slot, v_bar
   from public.available_slots(v_shop, v_svc, current_date, current_date + 14) s
+  where s.slot_start > now() + interval '36 hours'
   order by s.slot_start limit 1;
 
   if v_slot is null then

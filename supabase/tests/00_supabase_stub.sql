@@ -30,3 +30,31 @@ create or replace function auth.role() returns text
 language sql stable as $$
   select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'anon');
 $$;
+
+-- -----------------------------------------------------------------------------
+-- Minimale storage-stub. Op Supabase bestaat dit schema al; lokaal maken we
+-- net genoeg na om de policies uit migratie 000700 te kunnen aanmaken.
+-- -----------------------------------------------------------------------------
+create schema if not exists storage;
+grant usage on schema storage to anon, authenticated, service_role;
+
+create table if not exists storage.buckets (
+  id                 text primary key,
+  name               text not null,
+  public             boolean not null default false,
+  file_size_limit    bigint,
+  allowed_mime_types text[],
+  created_at         timestamptz not null default now()
+);
+
+create table if not exists storage.objects (
+  id         uuid primary key default gen_random_uuid(),
+  bucket_id  text references storage.buckets (id) on delete cascade,
+  name       text not null,
+  owner      uuid,
+  created_at timestamptz not null default now()
+);
+
+alter table storage.objects enable row level security;
+grant all on storage.objects to anon, authenticated, service_role;
+grant all on storage.buckets to service_role;

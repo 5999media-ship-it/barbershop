@@ -17,6 +17,7 @@ export interface DashboardContext {
   /** Het barber-record van deze gebruiker binnen de actieve shop, indien aanwezig. */
   barber: Barber | null
   canManage: boolean
+  isPlatformAdmin: boolean
 }
 
 /**
@@ -35,20 +36,27 @@ export async function getDashboardContext(): Promise<DashboardContext> {
 
   if (!user) redirect('/login')
 
-  const { data: memberships } = await supabase
-    .from('shop_members')
-    .select('shop_id, role, is_active')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
+  const [{ data: memberships }, { data: profile }] = await Promise.all([
+    supabase
+      .from('shop_members')
+      .select('shop_id, role, is_active')
+      .eq('user_id', user.id)
+      .eq('is_active', true),
+    supabase
+      .from('profiles')
+      .select('is_platform_admin')
+      .eq('id', user.id)
+      .maybeSingle<{ is_platform_admin: boolean }>(),
+  ])
 
+  const isPlatformAdmin = profile?.is_platform_admin ?? false
   const shopIds = (memberships ?? []).map((m) => m.shop_id as string)
-  if (shopIds.length === 0) redirect('/salon-aanmaken')
 
-  const { data: shopRows } = await supabase
-    .from('shops')
-    .select('*')
-    .in('id', shopIds)
-    .order('name')
+  // Een platformbeheerder is nergens lid van maar mag overal bij. RLS staat
+  // hem de volledige lijst al toe; hier laten we het membership-filter dus weg
+  // in plaats van een aparte, ruimere query te schrijven.
+  const query = supabase.from('shops').select('*').order('name')
+  const { data: shopRows } = isPlatformAdmin ? await query : await query.in('id', shopIds)
 
   const shops = (shopRows ?? []) as Shop[]
   if (shops.length === 0) redirect('/salon-aanmaken')
@@ -58,7 +66,7 @@ export async function getDashboardContext(): Promise<DashboardContext> {
   const shop = shops.find((s) => s.id === preferred) ?? shops[0]!
 
   const role = ((memberships ?? []).find((m) => m.shop_id === shop.id)?.role ??
-    'barber') as AppRole
+    (isPlatformAdmin ? 'shop_owner' : 'barber')) as AppRole
 
   const { data: barberRow } = await supabase
     .from('barbers')
@@ -74,7 +82,8 @@ export async function getDashboardContext(): Promise<DashboardContext> {
     shop,
     role,
     barber: barberRow ?? null,
-    canManage: role === 'shop_owner' || role === 'manager',
+    canManage: isPlatformAdmin || role === 'shop_owner' || role === 'manager',
+    isPlatformAdmin,
   }
 }
 

@@ -3,7 +3,14 @@
 import { useActionState, useState } from 'react'
 
 import { Alert, Badge, Button, Card, Field, Input, Textarea } from '@/components/ui'
-import { saveBarber, toggleBarberService, type ActionState } from '@/app/dashboard/actions'
+import ImageUpload from '@/components/ImageUpload'
+import {
+  inviteMember,
+  saveBarber,
+  saveBarberAvatar,
+  toggleBarberService,
+  type ActionState,
+} from '@/actions/dashboard'
 import type { Barber, Service } from '@/lib/supabase/database.types'
 
 export default function BarberEditor({
@@ -20,6 +27,10 @@ export default function BarberEditor({
   const [editing, setEditing] = useState<Barber | 'new' | null>(null)
   const [state, formAction, pending] = useActionState<ActionState, FormData>(saveBarber, {})
   const [linkState, linkAction] = useActionState<ActionState, FormData>(toggleBarberService, {})
+  const [inviteState, inviteAction, invitePending] = useActionState<ActionState, FormData>(
+    inviteMember,
+    {},
+  )
 
   const current = editing === 'new' ? null : editing
   const linked = new Set(links.map((l) => `${l.barber_id}:${l.service_id}`))
@@ -95,17 +106,75 @@ export default function BarberEditor({
         </Card>
       )}
 
+      <Card className="mb-6">
+        <h2 className="text-lg font-semibold">Kapper koppelen aan een account</h2>
+        <p className="mb-4 mt-1 text-sm text-ink-400">
+          Een kapper die zijn eigen foto, rooster en tarief wil beheren heeft een account
+          nodig. Laat hem zich registreren via de inlogpagina en koppel hem daarna hier met
+          hetzelfde e-mailadres.
+        </p>
+
+        {inviteState.error && (
+          <div className="mb-3">
+            <Alert>{inviteState.error}</Alert>
+          </div>
+        )}
+        {inviteState.message && (
+          <div className="mb-3">
+            <Alert tone="success">{inviteState.message}</Alert>
+          </div>
+        )}
+
+        <form action={inviteAction} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="shopId" value={shopId} />
+          <div className="min-w-56 flex-1">
+            <Field label="E-mailadres">
+              <Input name="email" type="email" required placeholder="kapper@voorbeeld.nl" />
+            </Field>
+          </div>
+          <div>
+            <Field label="Rol">
+              <select
+                name="role"
+                defaultValue="barber"
+                className="rounded-[10px] border border-ink-600 bg-ink-850 px-3.5 py-2.5 text-[15px]"
+              >
+                <option value="barber">Kapper</option>
+                <option value="manager">Manager</option>
+                <option value="shop_owner">Eigenaar</option>
+              </select>
+            </Field>
+          </div>
+          <Button type="submit" disabled={invitePending}>
+            Koppelen
+          </Button>
+        </form>
+      </Card>
+
       <div className="space-y-3">
         {barbers.map((b) => (
           <Card key={b.id}>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-4">
+                <div className="w-40 shrink-0">
+                  <ImageUpload
+                    kind="barbers"
+                    ownerId={b.id}
+                    currentUrl={b.avatar_url}
+                    label="Foto"
+                    onUploaded={async (url) => {
+                      await saveBarberAvatar(b.id, url)
+                    }}
+                  />
+                </div>
+                <div>
                 <p className="flex items-center gap-2 font-medium">
                   {b.display_name}
                   {!b.is_active && <Badge tone="danger">Inactief</Badge>}
                   {b.is_active && !b.accepts_online_bookings && <Badge>Offline</Badge>}
                 </p>
                 {b.bio && <p className="mt-0.5 text-sm text-ink-400">{b.bio}</p>}
+                </div>
               </div>
               <Button size="sm" variant="ghost" onClick={() => setEditing(b)}>
                 Bewerken

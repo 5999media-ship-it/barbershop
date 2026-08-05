@@ -27,19 +27,29 @@ export function formatDate(iso: string, timeZone: string, locale = 'nl-NL'): str
   }).format(new Date(iso))
 }
 
-export function formatDateTime(iso: string, timeZone: string, locale = 'nl-NL'): string {
-  return `${formatDate(iso, timeZone, locale)} om ${formatTime(iso, timeZone, locale)}`
+/** Datum en tijd achter elkaar. `at` is het verbindingswoord uit de vertaling. */
+export function formatDateTime(
+  iso: string,
+  timeZone: string,
+  locale = 'nl-NL',
+  at = 'om',
+): string {
+  return `${formatDate(iso, timeZone, locale)} ${at} ${formatTime(iso, timeZone, locale)}`
 }
 
+/** Duur in minuten; "min" en "u" zijn internationaal genoeg om te laten staan. */
 export function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
-  return m === 0 ? `${h} uur` : `${h} u ${m} min`
+  return m === 0 ? `${h} u` : `${h} u ${m} min`
 }
 
-export function weekdayName(weekday: number): string {
-  return WEEKDAYS_NL[weekday] ?? ''
+/** Naam van een weekdag (0 = zondag) in de gevraagde taal. */
+export function weekdayName(weekday: number, locale = 'nl-NL'): string {
+  // 2024-01-07 was een zondag; zo hoeven we geen lijst per taal bij te houden.
+  const d = new Date(Date.UTC(2024, 0, 7 + (weekday % 7)))
+  return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(d)
 }
 
 /** ISO-datum (yyyy-mm-dd) in een specifieke tijdzone. */
@@ -59,14 +69,25 @@ export function addDays(date: Date, days: number): Date {
   return d
 }
 
-/** "vandaag" / "morgen" / "zaterdag 9 augustus" */
-export function friendlyDay(isoDay: string, timeZone: string): string {
+/**
+ * "vandaag" / "morgen" / "zaterdag 9 augustus".
+ *
+ * De labels voor vandaag en morgen komen uit de vertalingen; de datum zelf
+ * laat Intl opmaken. Papiamentu kent Intl niet, dus daar valt de opmaak terug
+ * op Nederlands (zie INTL_LOCALE) — de woorden eromheen zijn wél Papiamentu.
+ */
+export function friendlyDay(
+  isoDay: string,
+  timeZone: string,
+  locale = 'nl-NL',
+  labels?: { today: string; tomorrow: string },
+): string {
   const today = isoDateInZone(new Date(), timeZone)
   const tomorrow = isoDateInZone(addDays(new Date(), 1), timeZone)
-  if (isoDay === today) return 'Vandaag'
-  if (isoDay === tomorrow) return 'Morgen'
+  if (isoDay === today) return labels?.today ?? 'Vandaag'
+  if (isoDay === tomorrow) return labels?.tomorrow ?? 'Morgen'
   const d = new Date(`${isoDay}T12:00:00Z`)
-  return new Intl.DateTimeFormat('nl-NL', {
+  return new Intl.DateTimeFormat(locale, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',

@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 
 import { Alert, Button, Field, Input } from '@/components/ui'
-import { signIn, signUp, type AuthState } from '@/app/login/actions'
+import { signIn, signUp, type AuthState } from '@/actions/auth'
 
 export default function LoginForm({
   nextPath,

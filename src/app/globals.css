@@ -1,33 +1,87 @@
 @import 'tailwindcss';
 
 /* ===========================================================================
-   Designtokens. Eén plek voor kleur, radius en schaduw zodat een whitelabel
-   later alleen deze variabelen hoeft te overschrijven.
+   Thema's
+   ---------------------------------------------------------------------------
+   Truc: de bestaande klassen (bg-ink-950, text-ink-100, …) blijven exact zoals
+   ze zijn. In plaats van elke component aan te passen wisselen we alleen de
+   waarden áchter de tokens. `ink-950` is altijd "de achtergrond van de pagina"
+   en `ink-100` altijd "de belangrijkste tekst" — in het donkere thema is dat
+   bijna zwart en bijna wit, in het lichte thema precies andersom.
+
+   Daardoor is dit hele bestand de enige plek waar het lichte thema bestaat.
    =========================================================================== */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-ink-950: #0b0b0d;
-  --color-ink-900: #121215;
-  --color-ink-850: #17171b;
-  --color-ink-800: #1e1e23;
-  --color-ink-700: #2a2a31;
-  --color-ink-600: #3a3a44;
-  --color-ink-400: #7c7c8a;
-  --color-ink-300: #a3a3b0;
-  --color-ink-100: #e7e7ec;
+  --color-ink-950: var(--bb-ink-950);
+  --color-ink-900: var(--bb-ink-900);
+  --color-ink-850: var(--bb-ink-850);
+  --color-ink-800: var(--bb-ink-800);
+  --color-ink-700: var(--bb-ink-700);
+  --color-ink-600: var(--bb-ink-600);
+  --color-ink-400: var(--bb-ink-400);
+  --color-ink-300: var(--bb-ink-300);
+  --color-ink-100: var(--bb-ink-100);
 
-  --color-brass-500: #c8a45c;
-  --color-brass-400: #d9b877;
-  --color-brass-300: #e6cd9c;
+  --color-brass-500: var(--bb-brass-500);
+  --color-brass-400: var(--bb-brass-400);
+  --color-brass-300: var(--bb-brass-300);
 
-  --color-success-500: #3fa96a;
-  --color-danger-500: #d9534f;
+  --color-success-500: var(--bb-success);
+  --color-danger-500: var(--bb-danger);
 
   --radius-card: 16px;
   --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* --------------------------------------------------------------------------
+   Licht — de standaard. Warm wit, geen kil blauwgrijs: past bij een barbershop.
+   -------------------------------------------------------------------------- */
 :root {
+  color-scheme: light;
+
+  --bb-ink-950: #faf9f7; /* paginagrond */
+  --bb-ink-900: #ffffff; /* kaarten     */
+  --bb-ink-850: #ffffff; /* invoervelden */
+  --bb-ink-800: #f1efec;
+  --bb-ink-700: #e4e0d9; /* randen      */
+  --bb-ink-600: #cdc8bf;
+  --bb-ink-400: #6c675e; /* gedempte tekst — 5.9:1 op wit */
+  --bb-ink-300: #454039;
+  --bb-ink-100: #17150f; /* hoofdtekst  */
+
+  /* Donkerder goud, anders is witte tekst op een gouden knop onleesbaar. */
+  --bb-brass-500: #7a5c18;
+  --bb-brass-400: #674c11;
+  --bb-brass-300: #5d4510;
+
+  --bb-success: #1c7a45;
+  --bb-danger: #b3261e;
+}
+
+/* --------------------------------------------------------------------------
+   Donker
+   -------------------------------------------------------------------------- */
+.dark {
   color-scheme: dark;
+
+  --bb-ink-950: #0b0b0d;
+  --bb-ink-900: #121215;
+  --bb-ink-850: #17171b;
+  --bb-ink-800: #1e1e23;
+  --bb-ink-700: #2a2a31;
+  --bb-ink-600: #3a3a44;
+  --bb-ink-400: #8b8b99;
+  --bb-ink-300: #a3a3b0;
+  --bb-ink-100: #e7e7ec;
+
+  --bb-brass-500: #c8a45c;
+  --bb-brass-400: #d9b877;
+  --bb-brass-300: #e6cd9c;
+
+  --bb-success: #4cbd7c;
+  --bb-danger: #ef6b66;
 }
 
 html,
@@ -38,9 +92,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Toegankelijkheid: focus moet altijd zichtbaar zijn, ook op donkere vlakken. */
+/* Toegankelijkheid: focus moet altijd zichtbaar zijn, in beide thema's. */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-brass-400);
+  outline: 2px solid var(--color-brass-500);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -63,6 +117,15 @@ body {
   border-radius: var(--radius-card);
 }
 
+/* In het lichte thema is een randje alleen te mager; een subtiele schaduw
+   geeft kaarten de diepte die ze in het donker van hun contrast krijgen. */
+:root .card {
+  box-shadow: 0 1px 2px rgb(23 21 15 / 0.04), 0 4px 12px rgb(23 21 15 / 0.04);
+}
+.dark .card {
+  box-shadow: none;
+}
+
 @utility btn-base {
   display: inline-flex;
   align-items: center;
@@ -70,7 +133,8 @@ body {
   gap: 0.5rem;
   font-weight: 600;
   border-radius: 10px;
-  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease, transform 0.05s ease;
 }
 
 .skip-link {
@@ -83,6 +147,6 @@ body {
   z-index: 50;
   padding: 0.5rem 1rem;
   background: var(--color-brass-500);
-  color: #000;
+  color: #fff;
   border-radius: 8px;
 }

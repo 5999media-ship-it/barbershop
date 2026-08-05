@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 
 import LoginForm from '@/components/dashboard/LoginForm'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Inloggen',

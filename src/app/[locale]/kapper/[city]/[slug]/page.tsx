@@ -1,13 +1,16 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { notFound, redirect } from 'next/navigation'
 
 import { Badge, Button, Card } from '@/components/ui'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
+
 import { citySlug, getShopBundle } from '@/lib/shop-queries'
 import { siteUrl } from '@/lib/env'
-import { formatDuration, formatMoney, WEEKDAYS_NL } from '@/lib/format'
+import { INTL_LOCALE, type Locale } from '@/i18n/routing'
+import { formatDuration, formatMoney, weekdayName } from '@/lib/format'
 
-type Params = Promise<{ city: string; slug: string }>
+type Params = Promise<{ city: string; slug: string; locale: string }>
 
 export const revalidate = 300 // vijf minuten ISR: snel én actueel genoeg
 
@@ -15,23 +18,25 @@ export const revalidate = 300 // vijf minuten ISR: snel én actueel genoeg
 // SEO-metadata
 // ---------------------------------------------------------------------------
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
-  const { slug } = await params
+  const { slug, locale } = await params
   const bundle = await getShopBundle(slug)
-  if (!bundle) return { title: 'Salon niet gevonden' }
+  if (!bundle) return { title: '404' }
 
   const { shop, services } = bundle
+  const t = await getTranslations({ locale, namespace: 'shop' })
+  const intl = INTL_LOCALE[locale as Locale] ?? 'nl-NL'
   const city = shop.city ?? ''
-  const cheapest = services.length
-    ? Math.min(...services.map((s) => s.price_cents))
-    : null
+  const cheapest = services.length ? Math.min(...services.map((s) => s.price_cents)) : 0
 
-  const title = `${shop.name} — kapper in ${city} | online afspraak maken`
+  const title = t('metaTitle', { name: shop.name, city })
   const description =
     shop.tagline ??
-    `Maak online een afspraak bij ${shop.name} in ${city}. ${services
-      .slice(0, 3)
-      .map((s) => s.name)
-      .join(', ')}${cheapest !== null ? ` vanaf ${formatMoney(cheapest, shop.currency)}` : ''}. Direct bevestigd.`
+    t('metaDescription', {
+      name: shop.name,
+      city,
+      services: services.slice(0, 3).map((s) => s.name).join(', '),
+      price: formatMoney(cheapest, shop.currency, intl),
+    })
 
   const path = `/kapper/${citySlug(shop.city)}/${shop.slug}`
 
@@ -52,11 +57,15 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 // Pagina
 // ---------------------------------------------------------------------------
 export default async function ShopPage({ params }: { params: Params }) {
-  const { city, slug } = await params
+  const { city, slug, locale } = await params
+  setRequestLocale(locale)
   const bundle = await getShopBundle(slug)
   if (!bundle) notFound()
 
   const { shop, services, barbers, workingHours } = bundle
+  const t = await getTranslations({ locale, namespace: 'shop' })
+  const tn = await getTranslations({ locale, namespace: 'nav' })
+  const intl = INTL_LOCALE[locale as Locale] ?? 'nl-NL'
 
   // Canonieke URL afdwingen: /kapper/verkeerde-stad/junique-fades stuurt door.
   const canonicalCity = citySlug(shop.city)
@@ -74,9 +83,10 @@ export default async function ShopPage({ params }: { params: Params }) {
     .join(', ')
 
   const priceRange = services.length
-    ? `${formatMoney(Math.min(...services.map((s) => s.price_cents)), shop.currency)} – ${formatMoney(
+    ? `${formatMoney(Math.min(...services.map((s) => s.price_cents)), shop.currency, intl)} – ${formatMoney(
         Math.max(...services.map((s) => s.price_cents)),
         shop.currency,
+        intl,
       )}`
     : undefined
 
@@ -189,7 +199,7 @@ export default async function ShopPage({ params }: { params: Params }) {
         <header className="mb-10">
           <nav aria-label="Kruimelpad" className="mb-4 text-sm text-ink-400">
             <Link href="/" className="hover:text-brass-300">
-              Kappers
+              {tn('home')}
             </Link>
             <span className="mx-2">/</span>
             <Link href={`/kapper/${canonicalCity}`} className="hover:text-brass-300">
@@ -208,12 +218,12 @@ export default async function ShopPage({ params }: { params: Params }) {
 
           <div className="mt-7 flex flex-wrap gap-3">
             <Link href={bookHref}>
-              <Button size="lg">Afspraak maken</Button>
+              <Button size="lg">{t('book')}</Button>
             </Link>
             {shop.phone && (
               <a href={`tel:${shop.phone.replace(/\s/g, '')}`}>
                 <Button size="lg" variant="ghost">
-                  Bellen
+                  {t('call')}
                 </Button>
               </a>
             )}
@@ -229,7 +239,7 @@ export default async function ShopPage({ params }: { params: Params }) {
         {/* Diensten — ook los waardevol voor long-tail zoekwoorden */}
         <section className="mb-12" aria-labelledby="diensten">
           <h2 id="diensten" className="mb-4 text-2xl font-semibold">
-            Behandelingen en prijzen
+            {t('services')}
           </h2>
           <ul className="space-y-2">
             {services.map((s) => (
@@ -246,13 +256,13 @@ export default async function ShopPage({ params }: { params: Params }) {
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-lg font-semibold text-brass-300">
-                      {formatMoney(s.price_cents, shop.currency)}
+                      {formatMoney(s.price_cents, shop.currency, intl)}
                     </p>
                     <Link
                       href={`${bookHref}?dienst=${s.slug}`}
                       className="text-xs text-ink-400 underline-offset-2 hover:text-brass-300 hover:underline"
                     >
-                      Boeken
+                      {t('bookThis')}
                     </Link>
                   </div>
                 </Card>
@@ -264,7 +274,7 @@ export default async function ShopPage({ params }: { params: Params }) {
         {/* Barbers */}
         <section className="mb-12" aria-labelledby="team">
           <h2 id="team" className="mb-4 text-2xl font-semibold">
-            Ons team
+            {t('team')}
           </h2>
           <div className="grid gap-3 sm:grid-cols-3">
             {barbers.map((b) => (
@@ -279,7 +289,7 @@ export default async function ShopPage({ params }: { params: Params }) {
         {/* Openingstijden */}
         <section className="mb-12" aria-labelledby="tijden">
           <h2 id="tijden" className="mb-4 text-2xl font-semibold">
-            Openingstijden
+            {t('hours')}
           </h2>
           <Card className="py-3">
             <dl className="divide-y divide-ink-800">
@@ -287,9 +297,11 @@ export default async function ShopPage({ params }: { params: Params }) {
                 const span = openingByDay.get(day)
                 return (
                   <div key={day} className="flex justify-between py-2.5 text-sm">
-                    <dt className="capitalize text-ink-300">{WEEKDAYS_NL[day]}</dt>
+                    <dt className="capitalize text-ink-300">{weekdayName(day, intl)}</dt>
                     <dd className={span ? 'text-ink-100' : 'text-ink-400'}>
-                      {span ? `${span.open.slice(0, 5)} – ${span.close.slice(0, 5)}` : 'Gesloten'}
+                      {span
+                        ? `${span.open.slice(0, 5)} – ${span.close.slice(0, 5)}`
+                        : t('closed')}
                     </dd>
                   </div>
                 )
@@ -297,18 +309,17 @@ export default async function ShopPage({ params }: { params: Params }) {
             </dl>
           </Card>
           <p className="mt-2 text-xs text-ink-400">
-            Tijden in {shop.timezone.replace('_', ' ')}. Per barber kunnen de tijden afwijken;
-            de boekingskalender toont de werkelijke beschikbaarheid.
+            {t('timesNote', { timezone: shop.timezone.replace('_', ' ') })}
           </p>
         </section>
 
         <div className="rounded-[16px] border border-brass-500/30 bg-brass-500/5 p-6 text-center">
-          <p className="text-lg font-medium">Klaar voor een verse coupe?</p>
+          <p className="text-lg font-medium">{t('ctaTitle')}</p>
           <p className="mt-1 text-sm text-ink-300">
-            Direct bevestigd. Gratis annuleren tot {shop.cancel_cutoff_hours} uur van tevoren.
+            {t('ctaBody', { hours: shop.cancel_cutoff_hours })}
           </p>
           <Link href={bookHref} className="mt-4 inline-block">
-            <Button size="lg">Kies je tijd</Button>
+            <Button size="lg">{t('ctaButton')}</Button>
           </Link>
         </div>
       </main>

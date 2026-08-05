@@ -237,3 +237,87 @@ end $$;
 
 \echo ''
 \echo '*** ALLE REGRESSIETESTS GESLAAGD ***'
+
+-- =============================================================================
+-- Regressietests voor het zelfbeheer van kappers (migratie 000700)
+-- =============================================================================
+insert into public.barbers (id, shop_id, user_id, slug, display_name)
+values ('bbbbbbbb-0000-4000-8000-000000000001',
+        '11111111-1111-4111-8111-111111111111',
+        'aaaaaaaa-0000-4000-8000-000000000004', 'testbarber', 'Test Barber')
+on conflict (id) do nothing;
+
+insert into public.barber_services (barber_id, service_id, price_cents, duration_minutes)
+values ('bbbbbbbb-0000-4000-8000-000000000001',
+        '33333333-3333-4333-8333-333333333331', 3500, 45)
+on conflict do nothing;
+
+\echo '--- TEST 32: kapper mag zijn eigen tarief aanpassen'
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-4000-8000-000000000004';
+do $$
+declare v_price int;
+begin
+  update public.barber_services set price_cents = 4250
+   where barber_id = 'bbbbbbbb-0000-4000-8000-000000000001'
+     and service_id = '33333333-3333-4333-8333-333333333331';
+
+  select price_cents into v_price from public.barber_services
+   where barber_id = 'bbbbbbbb-0000-4000-8000-000000000001'
+     and service_id = '33333333-3333-4333-8333-333333333331';
+
+  if v_price <> 4250 then raise exception 'FAAL: tarief niet opgeslagen (%)', v_price; end if;
+  raise notice '    OK — tarief staat op % cent', v_price;
+end $$;
+reset role;
+
+\echo '--- TEST 33: maar niet de duur van de behandeling'
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-4000-8000-000000000004';
+do $$
+declare v_dur int;
+begin
+  update public.barber_services set duration_minutes = 5
+   where barber_id = 'bbbbbbbb-0000-4000-8000-000000000001'
+     and service_id = '33333333-3333-4333-8333-333333333331';
+
+  select duration_minutes into v_dur from public.barber_services
+   where barber_id = 'bbbbbbbb-0000-4000-8000-000000000001'
+     and service_id = '33333333-3333-4333-8333-333333333331';
+
+  if v_dur <> 45 then
+    raise exception 'FAAL: kapper kon de duur op % zetten en zo de agenda volproppen', v_dur;
+  end if;
+  raise notice '    OK — duur bleef 45 minuten';
+end $$;
+reset role;
+
+\echo '--- TEST 34: kapper kan geen afbeelding voor een vreemde salon plaatsen'
+set role authenticated;
+set request.jwt.claim.sub = 'aaaaaaaa-0000-4000-8000-000000000004';
+do $$
+begin
+  if public.can_write_media('shops/eeeeeeee-0000-4000-8000-000000000001/image.webp') then
+    raise exception 'FAAL: schrijfrecht op een vreemde salon!';
+  end if;
+  if public.can_write_media('barbers/eeeeeeee-0000-4000-8000-000000000002/image.webp') then
+    raise exception 'FAAL: schrijfrecht op de foto van een andere kapper!';
+  end if;
+  if not public.can_write_media('barbers/bbbbbbbb-0000-4000-8000-000000000001/image.webp') then
+    raise exception 'FAAL: kapper kan zijn eigen foto niet plaatsen';
+  end if;
+  raise notice '    OK — alleen de eigen map';
+end $$;
+reset role;
+
+\echo '--- TEST 35: onzinnige paden geven false, geen crash'
+do $$
+begin
+  if public.can_write_media('shops/../../../etc/passwd') then
+    raise exception 'FAAL: pad-traversal geaccepteerd';
+  end if;
+  if public.can_write_media('rommel') then
+    raise exception 'FAAL: onzinpad geaccepteerd';
+  end if;
+  raise notice '    OK';
+end $$;

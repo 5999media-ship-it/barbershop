@@ -4,7 +4,7 @@ import { useActionState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { Alert, Button, Card } from '@/components/ui'
-import { saveWorkingHours, type ActionState } from '@/app/dashboard/actions'
+import { saveWorkingHours, type ActionState } from '@/actions/dashboard'
 import { WEEKDAYS_NL } from '@/lib/format'
 import type { Barber, WorkingHour } from '@/lib/supabase/database.types'
 

@@ -4,7 +4,7 @@ import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { Alert, Button, Field, Input } from '@/components/ui'
-import { createShop, type ActionState } from '@/app/dashboard/actions'
+import { createShop, type ActionState } from '@/actions/dashboard'
 
 export default function NewShopForm() {
   const router = useRouter()

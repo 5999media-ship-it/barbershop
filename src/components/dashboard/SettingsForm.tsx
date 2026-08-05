@@ -3,7 +3,8 @@
 import { useActionState } from 'react'
 
 import { Alert, Button, Card, Field, Input, Textarea } from '@/components/ui'
-import { saveShopSettings, type ActionState } from '@/app/dashboard/actions'
+import ImageUpload from '@/components/ImageUpload'
+import { saveShopLogo, saveShopSettings, type ActionState } from '@/actions/dashboard'
 import type { Shop } from '@/lib/supabase/database.types'
 
 export default function SettingsForm({ shop, canManage }: { shop: Shop; canManage: boolean }) {
@@ -25,6 +26,16 @@ export default function SettingsForm({ shop, canManage }: { shop: Shop; canManag
 
       <Card className="space-y-4">
         <h2 className="text-lg font-semibold">Profiel</h2>
+
+        <ImageUpload
+          kind="shops"
+          ownerId={shop.id}
+          currentUrl={shop.logo_url}
+          label="Logo van de salon"
+          onUploaded={async (url) => {
+            await saveShopLogo(shop.id, url)
+          }}
+        />
 
         <Field label="Naam" required>
           <Input name="name" defaultValue={shop.name} required maxLength={120} />

@@ -1,19 +1,29 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
+
+import { Link } from '@/i18n/navigation'
 
 import { Button, Card } from '@/components/ui'
 import { citySlug, listPublishedShops } from '@/lib/shop-queries'
 
 export const revalidate = 600
 
-export const metadata: Metadata = {
-  title: 'Online een kapper boeken — barbershops bij jou in de buurt',
-  description:
-    'Vind een barbershop en boek in dertig seconden. Zonder account, direct bevestigd, gratis annuleren.',
-  alternates: { canonical: '/' },
+type Params = Promise<{ locale: string }>
+
+export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+  const { locale } = await params
+  const t = await getTranslations({ locale, namespace: 'seo' })
+  return {
+    title: t('defaultTitle'),
+    description: t('defaultDescription'),
+    alternates: { canonical: '/' },
+  }
 }
 
-export default async function HomePage() {
+export default async function HomePage({ params }: { params: Params }) {
+  const { locale } = await params
+  setRequestLocale(locale)
+  const t = await getTranslations({ locale, namespace: 'home' })
   const shops = await listPublishedShops()
 
   const byCity = shops.reduce<Record<string, typeof shops>>((acc, shop) => {
@@ -26,27 +36,22 @@ export default async function HomePage() {
     <main className="mx-auto max-w-3xl px-5 pb-24 pt-16">
       <section className="mb-16 text-center">
         <p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-brass-400">
-          Barbershop booking
+          {t('eyebrow')}
         </p>
         <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
-          Een verse coupe,
+          {t('titleLine1')}
           <br />
-          <span className="text-brass-300">zonder wachtrij</span>
+          <span className="text-brass-300">{t('titleLine2')}</span>
         </h1>
-        <p className="mx-auto mt-5 max-w-lg text-lg text-ink-300">
-          Kies je behandeling, je barber en je tijd. Direct bevestigd, geen account nodig,
-          gratis annuleren.
-        </p>
+        <p className="mx-auto mt-5 max-w-lg text-lg text-ink-300">{t('subtitle')}</p>
       </section>
 
       {shops.length === 0 ? (
         <Card className="text-center">
-          <p className="font-medium">Nog geen salons gepubliceerd</p>
-          <p className="mt-2 text-sm text-ink-400">
-            Draai de seed-migratie of maak via het dashboard je eerste salon aan.
-          </p>
+          <p className="font-medium">{t('emptyTitle')}</p>
+          <p className="mt-2 text-sm text-ink-400">{t('emptyBody')}</p>
           <Link href="/dashboard" className="mt-5 inline-block">
-            <Button>Naar het dashboard</Button>
+            <Button>{t('toDashboard')}</Button>
           </Link>
         </Card>
       ) : (
@@ -73,11 +78,11 @@ export default async function HomePage() {
 
       <footer className="mt-20 border-t border-ink-800 pt-8 text-sm text-ink-400">
         <p>
-          Ben je kapper?{' '}
+          {t('footerQuestion')}{' '}
           <Link href="/login" className="text-brass-300 hover:underline">
-            Meld je salon aan
+            {t('footerLink')}
           </Link>{' '}
-          en zet je agenda vanavond nog online.
+          {t('footerTail')}
         </p>
       </footer>
     </main>

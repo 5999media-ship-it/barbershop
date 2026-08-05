@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 
 import { Badge, Card } from '@/components/ui'
 import BookingActions from '@/components/dashboard/BookingActions'

@@ -3,7 +3,7 @@
 import { useActionState } from 'react'
 
 import { Button } from '@/components/ui'
-import { updateBookingStatus, type ActionState } from '@/app/dashboard/actions'
+import { updateBookingStatus, type ActionState } from '@/actions/dashboard'
 
 /**
  * Statusknoppen bij een afspraak. Bewust drie losse forms in plaats van één

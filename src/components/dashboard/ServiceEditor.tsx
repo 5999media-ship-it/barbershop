@@ -3,7 +3,7 @@
 import { useActionState, useState } from 'react'
 
 import { Alert, Badge, Button, Card, Field, Input, Textarea } from '@/components/ui'
-import { saveService, type ActionState } from '@/app/dashboard/actions'
+import { saveService, type ActionState } from '@/actions/dashboard'
 import { formatDuration, formatMoney } from '@/lib/format'
 import type { Service } from '@/lib/supabase/database.types'
 

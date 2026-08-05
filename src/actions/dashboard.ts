@@ -334,3 +334,179 @@ export async function createShop(_prev: ActionState, formData: FormData): Promis
 function slugify(value: string): string {
   return citySlug(value).slice(0, 60)
 }
+
+// ---------------------------------------------------------------------------
+// Afbeeldingen
+// ---------------------------------------------------------------------------
+// De upload zelf gebeurt in de browser rechtstreeks naar Supabase Storage,
+// onder de policies uit migratie 000700. Hier slaan we alleen de URL op — en
+// ook dat gaat via RLS, dus iemand die een vreemde shop_id meestuurt krijgt
+// simpelweg nul rijen bijgewerkt.
+
+export async function saveShopLogo(shopId: string, url: string): Promise<ActionState> {
+  if (!z.string().uuid().safeParse(shopId).success) return { error: 'Ongeldige salon.' }
+  if (!z.string().url().max(500).safeParse(url).success) return { error: 'Ongeldige afbeelding.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('shops').update({ logo_url: url }).eq('id', shopId)
+  if (error) return { error: 'Opslaan lukte niet.' }
+
+  revalidatePath('/dashboard/settings')
+  revalidatePath('/', 'layout')
+  return { message: 'Logo opgeslagen.' }
+}
+
+export async function saveBarberAvatar(barberId: string, url: string): Promise<ActionState> {
+  if (!z.string().uuid().safeParse(barberId).success) return { error: 'Ongeldige barber.' }
+  if (!z.string().url().max(500).safeParse(url).success) return { error: 'Ongeldige afbeelding.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('barbers').update({ avatar_url: url }).eq('id', barberId)
+  if (error) return { error: 'Opslaan lukte niet.' }
+
+  revalidatePath('/dashboard/barbers')
+  revalidatePath('/dashboard/profiel')
+  revalidatePath('/', 'layout')
+  return { message: 'Foto opgeslagen.' }
+}
+
+// ---------------------------------------------------------------------------
+// Zelfbeheer voor de kapper
+// ---------------------------------------------------------------------------
+const selfProfileSchema = z.object({
+  barberId: z.string().uuid(),
+  bio: z.string().trim().max(1000).optional().or(z.literal('')),
+  instagram: z.string().trim().max(100).optional().or(z.literal('')),
+})
+
+export async function saveOwnProfile(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = selfProfileSchema.safeParse({
+    barberId: formData.get('barberId'),
+    bio: formData.get('bio') ?? '',
+    instagram: formData.get('instagram') ?? '',
+  })
+  if (!parsed.success) return { error: 'Controleer de ingevulde velden.' }
+
+  const supabase = await createClient()
+  // De trigger tg_barbers_guard zet alles behalve bio, avatar en instagram
+  // terug, dus zelfs als hier per ongeluk meer velden bij komen te staan kan
+  // een kapper zichzelf niet naar een andere salon verplaatsen.
+  const { error } = await supabase
+    .from('barbers')
+    .update({
+      bio: parsed.data.bio || null,
+      instagram: parsed.data.instagram || null,
+    })
+    .eq('id', parsed.data.barberId)
+
+  if (error) return { error: 'Opslaan lukte niet.' }
+
+  revalidatePath('/dashboard/profiel')
+  return { message: 'Opgeslagen.' }
+}
+
+export async function saveOwnPrice(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const barberId = String(formData.get('barberId') ?? '')
+  const serviceId = String(formData.get('serviceId') ?? '')
+  const priceEuro = Number(formData.get('priceEuro'))
+
+  if (!z.string().uuid().safeParse(barberId).success) return { error: 'Ongeldige barber.' }
+  if (!z.string().uuid().safeParse(serviceId).success) return { error: 'Ongeldige behandeling.' }
+  if (!Number.isFinite(priceEuro) || priceEuro < 0 || priceEuro > 10000) {
+    return { error: 'Vul een geldig bedrag in.' }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('barber_services')
+    .update({ price_cents: Math.round(priceEuro * 100) })
+    .eq('barber_id', barberId)
+    .eq('service_id', serviceId)
+
+  if (error) return { error: 'Opslaan lukte niet.' }
+
+  revalidatePath('/dashboard/profiel')
+  return { message: 'Tarief opgeslagen.' }
+}
+
+// ---------------------------------------------------------------------------
+// Teamleden koppelen op e-mailadres
+// ---------------------------------------------------------------------------
+export async function inviteMember(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const shopId = String(formData.get('shopId') ?? '')
+  const email = String(formData.get('email') ?? '')
+  const role = String(formData.get('role') ?? 'barber')
+
+  if (!z.string().uuid().safeParse(shopId).success) return { error: 'Ongeldige salon.' }
+  if (!z.string().email().safeParse(email).success) return { error: 'Vul een geldig e-mailadres in.' }
+  if (!['barber', 'manager', 'shop_owner'].includes(role)) return { error: 'Ongeldige rol.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('invite_member', {
+    p_shop_id: shopId,
+    p_email: email,
+    p_role: role,
+  })
+
+  if (error) return { error: error.hint ?? 'Koppelen lukte niet.' }
+
+  const result = data as { ok: boolean; reason?: string; hint?: string }
+  if (!result.ok) {
+    return {
+      error:
+        result.reason === 'no_account'
+          ? 'Deze persoon heeft nog geen account. Laat hem zich eerst registreren via de inlogpagina, daarna koppel je hem hier.'
+          : 'Koppelen lukte niet.',
+    }
+  }
+
+  revalidatePath('/dashboard/barbers')
+  return { message: 'Gekoppeld aan deze salon.' }
+}
+
+// ---------------------------------------------------------------------------
+// Platformbeheer
+// ---------------------------------------------------------------------------
+export async function togglePlatformAdmin(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const email = String(formData.get('email') ?? '')
+  const value = formData.get('value') === 'true'
+
+  if (!z.string().email().safeParse(email).success) return { error: 'Vul een geldig e-mailadres in.' }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('set_platform_admin', {
+    p_email: email,
+    p_value: value,
+  })
+
+  if (error) return { error: error.hint ?? 'Wijzigen lukte niet.' }
+
+  const result = data as { ok: boolean; reason?: string }
+  if (!result.ok) return { error: 'Er bestaat geen account met dit e-mailadres.' }
+
+  revalidatePath('/dashboard/platform')
+  return { message: value ? 'Toegevoegd als platformbeheerder.' : 'Rechten ingetrokken.' }
+}
+
+export async function setShopPublished(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const shopId = String(formData.get('shopId') ?? '')
+  const value = formData.get('value') === 'true'
+  if (!z.string().uuid().safeParse(shopId).success) return { error: 'Ongeldige salon.' }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from('shops').update({ is_published: value }).eq('id', shopId)
+  if (error) return { error: 'Wijzigen lukte niet.' }
+
+  revalidatePath('/dashboard/platform')
+  revalidatePath('/', 'layout')
+  return { message: value ? 'Salon gepubliceerd.' : 'Salon offline gehaald.' }
+}
