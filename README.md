@@ -53,13 +53,15 @@ Vul in:
 
 | Variabele | Waar vind je hem | Geheim? |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Project Settings → API | nee |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Project Settings → API Keys → publishable | nee |
+| `SUPABASE_URL` | Project Settings → API | nee |
+| `SUPABASE_ANON_KEY` | Project Settings → API Keys → publishable | nee |
 | `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API Keys → secret | **ja** |
-| `NEXT_PUBLIC_SITE_URL` | je eigen domein | nee |
+| `SITE_URL` | je eigen domein | nee |
 
 De service-role key omzeilt alle RLS-policies. Zet hem nooit in een variabele
-die met `NEXT_PUBLIC_` begint en commit hem nooit.
+die met `NEXT_PUBLIC_` begint en commit hem nooit. De oude `NEXT_PUBLIC_`-namen
+werken nog als fallback voor `npm run dev`, maar gebruik in productie de namen
+hierboven — zie *Configuratie is runtime, niet buildtime*.
 
 ### 3. Draaien
 
@@ -70,6 +72,7 @@ npm run dev
 
 - Publiek: <http://localhost:3000>
 - Demosalon: <http://localhost:3000/kapper/amsterdam/junique-fades>
+- In het Engels: <http://localhost:3000/en/kapper/amsterdam/junique-fades>
 - Dashboard: <http://localhost:3000/dashboard> (maak eerst een account via `/login`)
 
 ### 4. Jezelf eigenaar maken van de demosalon
@@ -150,6 +153,98 @@ is optie A of B beter.
 
 ---
 
+## Rollen
+
+| Rol | Bereik | Mag |
+|---|---|---|
+| `platform_admin` | het hele platform | alles, alle salons zien en publiceren, andere beheerders aanwijzen |
+| `shop_owner` | één salon | alles binnen de salon, inclusief managers en eigenaren aanwijzen |
+| `manager` | één salon | alles binnen de salon behalve rollen uitdelen zwaarder dan kapper |
+| `barber` | zichzelf | eigen foto, bio, werktijden, vrije dagen, afspraken en tarief |
+
+Een kapper beheert dus wél zijn eigen prijs, maar niet welke behandelingen
+bestaan of hoe lang ze duren. Dat is bewust: zou hij de duur mogen aanpassen,
+dan kan hij zijn behandeling op vijf minuten zetten en de agenda volproppen.
+Zie `tg_barber_services_guard` — en de test die dat afdwingt.
+
+### Jezelf tot superadmin maken
+
+Er is geen knop voor, want dat zou het hele rollenmodel waardeloos maken.
+Registreer eerst een gewoon account via `/login`, en draai daarna in de
+Supabase SQL Editor:
+
+```sql
+update public.profiles
+   set is_platform_admin = true
+ where email = 'jouw@email.nl';
+```
+
+Dit werkt alleen vanuit de SQL Editor. `tg_profiles_guard` blokkeert deze kolom
+voor alles wat via de website of de REST-API binnenkomt. Daarna kun je vanuit
+**Dashboard → Platform** andere beheerders aanwijzen.
+
+---
+
+## Talen
+
+Vier talen, met de taal in de URL:
+
+| Taal | URL |
+|---|---|
+| Nederlands | `/kapper/willemstad/salon` |
+| English | `/en/kapper/willemstad/salon` |
+| Español | `/es/kapper/willemstad/salon` |
+| Papiamentu | `/pap/kapper/willemstad/salon` |
+
+Nederlands staat op de kale URL (`localePrefix: 'as-needed'`). De sitemap bevat
+per pagina een `hreflang`-blok met alle vier de versies plus `x-default`, zodat
+Google een Spaanstalige zoeker de Spaanse pagina toont in plaats van de
+pagina's als duplicaat te behandelen.
+
+Teksten staan in `messages/{nl,en,es,pap}.json`. Een taal toevoegen is drie
+stappen: het bestand kopiëren en vertalen, de code toevoegen aan `locales` in
+`src/i18n/routing.ts`, en een label in `LOCALE_LABEL`.
+
+> **Laat het Papiamentu nakijken.** Ik heb de Curaçaose spelling aangehouden,
+> maar ik ben geen moedertaalspreker. Voor een site die je klanten moeten
+> vertrouwen is een half uur van iemand die de taal echt spreekt het waard.
+> Het gaat om één bestand: `messages/pap.json`.
+
+Datum- en tijdopmaak loopt via `Intl`. Papiamentu heeft daar geen eigen
+gegevens, dus die valt terug op Nederlandse opmaak — de woorden eromheen zijn
+wél Papiamentu. Zie `INTL_LOCALE` in `src/i18n/routing.ts`.
+
+---
+
+## Licht en donker
+
+De themakeuze staat in een cookie, niet in localStorage. Daardoor weet de
+server al bij het renderen welk thema hij moet meesturen en zie je nooit een
+flits van het verkeerde thema. Staat de keuze op *Systeem*, dan zet een klein
+script in de `<head>` de klasse vóórdat de browser iets tekent.
+
+Alle kleuren zitten in `src/app/globals.css`. De componenten gebruiken
+semantische namen (`ink-950` is altijd "achtergrond", `ink-100` altijd
+"hoofdtekst"), dus een thema aanpassen betekent dat je alleen dat ene bestand
+opent — niet vijftig componenten.
+
+---
+
+## Afbeeldingen
+
+Logo per salon, profielfoto per kapper. De conversie naar WebP gebeurt in de
+browser vóór het uploaden: een foto van 4 MB uit een telefooncamera wordt zo'n
+60 kB, vierkant bijgesneden op 512×512, met respect voor de EXIF-oriëntatie
+(anders staan telefoonfoto's gekanteld).
+
+De opslagbucket accepteert uitsluitend `image/webp` en maximaal 2 MB, dus er
+kan nooit per ongeluk een onbewerkte JPEG in belanden. Wie waar mag schrijven
+bepaalt `can_write_media()`: `shops/<id>/` is voor managers, `barbers/<id>/`
+voor de kapper zelf én zijn managers. Padtrucs als `shops/../../` leveren
+netjes `false` op in plaats van een crash.
+
+---
+
 ## Architectuur
 
 ```
@@ -208,15 +303,20 @@ supabase/migrations/
   …000400_booking_rpc.sql      create_booking, cancel, reschedule, rate limiting
   …000500_notifications.sql    outbox, triggers, dispatcher-API, onderhoud
   …000600_seed_demo.sql        demodata
+  …000700_roles_storage.sql    zelfbeheer kappers, opslag, platformbeheer
 supabase/tests/                 lokale regressietests (20 stuks)
 supabase/functions/
   notifications-dispatch/       Edge Function: mail via Resend, SMS via Twilio
 
-src/app/kapper/[city]/[slug]/   publieke salonpagina (SEO + JSON-LD)
-src/app/kapper/[city]/          stadspagina (het GEO-anker)
-src/app/afspraak/[token]/       zelfservice voor gasten
-src/app/dashboard/              agenda, afspraken, diensten, team, rooster
+messages/{nl,en,es,pap}.json    alle interfaceteksten
+src/i18n/                       talen, URL-structuur, navigatie
+src/app/[locale]/kapper/…       publieke salon- en stadspagina's (SEO + JSON-LD)
+src/app/[locale]/afspraak/…     zelfservice voor gasten
+src/app/[locale]/dashboard/     agenda, afspraken, diensten, team, rooster
+src/app/[locale]/dashboard/profiel   zelfbeheer voor de kapper
+src/app/[locale]/dashboard/platform  superadmin: alle salons en beheerders
 src/app/api/book/route.ts       rate limiting + boeking aanmaken
+src/components/ImageUpload.tsx  WebP-conversie in de browser
 src/lib/format.ts               tijdzone-veilige formattering
 ```
 
@@ -229,7 +329,7 @@ npm run db:test
 ```
 
 Draait alle migraties op een lokale, kale Postgres 16 (met een stub voor het
-`auth`-schema) en voert 31 tests uit:
+`auth`- en `storage`-schema) en voert 35 tests uit:
 
 - `01_smoke.sql` — beschikbaarheid, normalisatie van e-mail en telefoon,
   dubbelboeken, de EXCLUDE-constraint, rate limiting, annuleren, het intrekken
@@ -241,7 +341,9 @@ Draait alle migraties op een lokale, kale Postgres 16 (met een stub voor het
   uitlezen van `manage_token`, een manager die zichzelf tot eigenaar
   promoveert, het verplaatsen van een boeking naar een andere salon, het
   omzeilen van de rate limiting via de REST-API, en het verzetten van een
-  afspraak dat een valse annuleringsmail veroorzaakte.
+  afspraak dat een valse annuleringsmail veroorzaakte. Plus het zelfbeheer van
+  kappers: wél het eigen tarief, niet de duur, en geen schrijfrechten op de
+  map van een andere salon.
 
 Vereist lokaal `postgresql-16` en `postgresql-contrib-16`.
 
@@ -312,6 +414,10 @@ Wat jij nog moet doen — dit is waar de winst zit:
 
 ## Wat er bewust nog niet in zit
 
+- **Het dashboard is nog Nederlands.** De publieke kant — alles wat je klanten
+  zien — is volledig vertaald in vier talen. De beheerschermen niet: dat is
+  personeelstaal en het scheelt honderden strings. De sleutels staan al klaar
+  in `messages/*.json` onder `dashboard`, dus uitbreiden kan stap voor stap.
 - **Online betalen / aanbetaling.** Het datamodel is er klaar voor
   (`price_cents`, `currency`, `status = 'pending'`). Mollie is voor NL/BE de
   logische keuze vanwege iDEAL: `pending` bij aanmaken, via webhook naar

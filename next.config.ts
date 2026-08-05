@@ -1,4 +1,7 @@
+import createNextIntlPlugin from 'next-intl/plugin'
 import type { NextConfig } from 'next'
+
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 
 /**
  * Security headers. Deze horen niet in een <meta> tag maar in de response.
@@ -47,4 +50,4 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+export default withNextIntl(nextConfig)
