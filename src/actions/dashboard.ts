@@ -499,7 +499,7 @@ export async function createShop(_prev: ActionState, formData: FormData): Promis
     city: formData.get('city'),
     ownerEmail: formData.get('ownerEmail') ?? '',
     timezone: formData.get('timezone') ?? 'America/Curacao',
-    currency: formData.get('currency') ?? 'ANG',
+    currency: formData.get('currency') ?? 'XCG',
   })
   if (!parsed.success) return { error: 'Vul minimaal een naam en een plaats in.' }
 

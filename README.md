@@ -1,4 +1,4 @@
-# BarberBook — multi-tenant bookingplatform voor barbershops
+# Barberia — multi-tenant bookingplatform voor barbershops
 
 Next.js 15 (App Router) + Supabase. Eén platform, meerdere salons, meerdere barbers
 per salon, gastboekingen zonder account, en een agenda waarin dubbelboeken

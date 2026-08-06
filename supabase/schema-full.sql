@@ -2416,7 +2416,7 @@ create or replace function public.admin_create_shop(
   p_city        text,
   p_owner_email text default null,
   p_timezone    text default 'America/Curacao',
-  p_currency    char(3) default 'ANG'
+  p_currency    char(3) default 'XCG'
 )
 returns jsonb
 language plpgsql

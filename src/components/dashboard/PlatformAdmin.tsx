@@ -80,10 +80,10 @@ export default function PlatformAdmin({
               <Field label="Valuta">
                 <select
                   name="currency"
-                  defaultValue="ANG"
+                  defaultValue="XCG"
                   className="w-full rounded-[10px] border border-ink-600 bg-ink-850 px-3.5 py-2.5 text-[15px]"
                 >
-                  <option value="ANG">ANG — Antilliaanse gulden</option>
+                  <option value="XCG">XCG — Caribische gulden (Cg.)</option>
                   <option value="AWG">AWG — Arubaanse florin</option>
                   <option value="USD">USD — Amerikaanse dollar</option>
                   <option value="EUR">EUR — euro</option>

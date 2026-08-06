@@ -371,7 +371,7 @@ begin
    where id = 'aaaaaaaa-0000-4000-8000-000000000001';
 
   perform set_config('request.jwt.claim.sub', 'aaaaaaaa-0000-4000-8000-000000000001', true);
-  v_res := public.admin_create_shop('Fade Factory', 'Willemstad', null, 'America/Curacao', 'ANG');
+  v_res := public.admin_create_shop('Fade Factory', 'Willemstad', null, 'America/Curacao', 'XCG');
 
   if not (v_res ->> 'ok')::boolean then raise exception 'FAAL: aanmaken mislukt'; end if;
   raise notice '    OK — salon aangemaakt met slug %', v_res ->> 'slug';
